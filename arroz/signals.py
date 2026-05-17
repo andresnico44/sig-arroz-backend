@@ -1,92 +1,69 @@
 import socket
-from django.core.mail import EmailMultiAlternatives
+import json
+import urllib.request
 from django.dispatch import receiver
-from django.urls import reverse
+from django.conf import settings
 # pyrefly: ignore [missing-import]
 from django_rest_passwordreset.signals import reset_password_token_created
-from django.conf import settings
 
 @receiver(reset_password_token_created)
 def password_reset_token_created(sender, instance, reset_password_token, *args, **kwargs):
-    """
-    Envía un correo real con el enlace de recuperación y un diseño HTML espectacular
-    """
-    # Establecer un tiempo límite de conexión de 5 segundos para evitar cuelgues del servidor Gunicorn
-    socket.setdefaulttimeout(5)
+        reset_url = f"https://sig-arroz-frontend.vercel.app/reset-password?token={reset_password_token.key}"
+        subject = "Recuperacion de Contrasena - SIG-ARROZ"
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sig-arroz.com')
+        to_email = reset_password_token.user.email
+        text_content = (
+                    f"Hola,\n\n"
+                    f"Hemos recibido una solicitud para restablecer tu contrasena en SIG-ARROZ.\n"
+                    f"Haz clic en el siguiente enlace para crear una nueva contrasena:\n"
+                    f"{reset_url}\n\n"
+                    f"Si no solicitaste este cambio, puedes ignorar este correo.\n\n"
+                    f"Saludos,\nEl equipo de SIG-ARROZ"
+        )
 
-    # Enlace hacia la ruta del Frontend React
-    reset_url = f"https://sig-arroz-frontend.vercel.app/reset-password?token={reset_password_token.key}"
-
-    # Detalles del Correo
-    subject = "Recuperación de Contraseña - SIG-ARROZ 🌾"
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sig-arroz.com')
-    to_email = reset_password_token.user.email
-
-    # Contenido en Texto Plano (para bandejas antiguas)
-    text_content = (
-        f"Hola {reset_password_token.user.username},\n\n"
-        f"Hemos recibido una solicitud para restablecer tu contraseña en la plataforma SIG-ARROZ.\n"
-        f"Por favor, haz clic en el siguiente enlace para crear una nueva clave (el token es de un solo uso):\n\n"
-        f"{reset_url}\n\n"
-        f"Si tú no solicitaste esto, puedes ignorar este correo.\n\n"
-        f"Atentamente,\nEl Equipo de SIG-ARROZ."
-    )
-
-    # HTML Corporativo Premium (Verde Agrícola y detalles profesionales)
     html_content = f"""
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; background-color: #f0f7f4; padding: 40px 20px; color: #112d18;">
-        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 40px rgba(30, 86, 49, 0.1); overflow: hidden; border: 1px solid #e1ebe6;">
-            <!-- Cabecera -->
-            <div style="background-color: #1e5631; padding: 30px; text-align: center;">
-                <span style="font-size: 28px; font-weight: bold; color: #ffffff; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 8px;">
-                    🌾 SIG-ARROZ
-                </span>
-            </div>
-            
-            <!-- Cuerpo -->
-            <div style="padding: 40px 30px; line-height: 1.6;">
-                <h2 style="color: #1e5631; margin-top: 0; font-size: 22px; font-weight: 700;">¡Hola, {reset_password_token.user.username}!</h2>
-                <p style="font-size: 15px; color: #4a5a4e; margin-bottom: 20px;">
-                    Hemos recibido una solicitud para restablecer tu contraseña de acceso en la plataforma de monitoreo y control del cultivo de arroz <strong>SIG-ARROZ</strong>.
-                </p>
-                <p style="font-size: 15px; color: #4a5a4e; margin-bottom: 30px;">
-                    Para establecer una nueva contraseña, haz clic en el botón de abajo. Ten en cuenta que este enlace expira en un periodo de 24 horas y es válido para un único uso.
-                </p>
-                
-                <!-- Botón -->
-                <div style="text-align: center; margin: 35px 0;">
-                    <a href="{reset_url}" style="background-color: #4c9a2a; color: #ffffff; text-decoration: none; font-weight: bold; padding: 15px 35px; border-radius: 12px; font-size: 16px; box-shadow: 0 6px 20px rgba(76, 154, 42, 0.25); display: inline-block;">
-                        Restablecer Contraseña
-                    </a>
-                </div>
-                
-                <p style="font-size: 12px; color: #889988; text-align: center; margin-top: 25px;">
-                    Si el botón de arriba no responde, copia y pega este enlace en tu navegador:<br>
-                    <a href="{reset_url}" style="color: #4c9a2a; text-decoration: underline;">{reset_url}</a>
-                </p>
-                
-                <hr style="border: 0; border-top: 1px solid #e2ece6; margin: 30px 0;">
-                
-                <p style="font-size: 13px; color: #6a7a6e;">
-                    Si no has realizado esta solicitud, puedes ignorar este correo de forma segura. Tu contraseña actual no sufrirá ningún cambio.
-                </p>
-            </div>
-            
-            <!-- Pie de página -->
-            <div style="background-color: #f8faf9; padding: 20px; text-align: center; font-size: 12px; color: #8a9a8d; border-top: 1px solid #eef2f0;">
-                Plataforma SIG-ARROZ &copy; 2026. Todos los derechos reservados.
-            </div>
-        </div>
-    </div>
+        <html>
+            <body>
+                    <h2>SIG-ARROZ</h2>
+                            <p>Hola,</p>
+                                    <p>Hemos recibido una solicitud para restablecer tu contrasena.</p>
+                                            <p><a href="{reset_url}" style="background:#10b981;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;">Restablecer Contrasena</a></p>
+        <p>Si no solicitaste este cambio, ignora este correo.</p>
+    </body>
+    </html>
     """
 
-    # Generación y Envío del Correo Real
-    msg = EmailMultiAlternatives(subject, text_content, from_email, [to_email])
-    msg.attach_alternative(html_content, "text/html")
-    
-    try:
-        msg.send()
-        print(f"📧 [EMAIL SUCCESS] Correo enviado a: {to_email}")
-    except Exception as e:
-        print(f"❌ [EMAIL ERROR] No se pudo enviar el correo a {to_email} por SMTP. Detalle: {e}")
+        # Brevo API configuration
+            api_key = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+                url = "https://api.brevo.com/v3/smtp/email"
 
+                        payload = {
+                                "sender": {
+                                            "name": "SIG-ARROZ",
+                                                        "email": from_email
+                                                                },
+                                                                        "to": [
+                                                                                    {
+                                                                                                    "email": to_email
+                                                                                                                }
+                                                                                                                        ],
+                                                                                                                                "subject": subject,
+                                                                                                                                        "htmlContent": html_content,
+                                                                                                                                                "textContent": text_content
+                                                                                                                                                    }
+                                                                                                                                                        
+                                                                                                                                                            headers = {
+                                                                                                                                                                    "accept": "application/json",
+                                                                                                                                                                            "api-key": api_key,
+                                                                                                                                                                                    "content-type": "application/json"
+                                                                                                                                                                                        }
+                                                                                                                                                                                            
+                                                                                                                                                                                                try:
+                                                                                                                                                                                                        req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
+                                                                                                                                                                                                                with urllib.request.urlopen(req, timeout=5) as response:
+                                                                                                                                                                                                                            res_body = response.read().decode('utf-8')
+                                                                                                                                                                                                                                        print(f"EMAIL SUCCESS: Correo enviado por HTTP API a {to_email}. Respuesta: {res_body}")
+                                                                                                                                                                                                                                            except Exception as e:
+                                                                                                                                                                                                                                                    print(f"EMAIL ERROR: No se pudo enviar el correo a {to_email} por HTTP API. Detalle: {e}")
+                                                                                                                                                                                                                                                    
+    
