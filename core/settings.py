@@ -19,11 +19,7 @@ SECRET_KEY = 'django-insecure-8x%b!#r@omg&@ysaa!s6%_k^!h$fcn%+*78jdhetg0ui-%38wz
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    'sig-arroz-backend-production.up.railway.app',
-]
+ALLOWED_HOSTS = ['*']
 
 
 
@@ -65,6 +61,7 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
+CSRF_TRUSTED_ORIGINS = ['https://sig-arroz-frontend.vercel.app']
 
 ROOT_URLCONF = 'core.urls'
 
