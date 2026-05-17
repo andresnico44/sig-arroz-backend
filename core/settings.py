@@ -17,7 +17,7 @@ load_dotenv()
 SECRET_KEY = 'django-insecure-8x%b!#r@omg&@ysaa!s6%_k^!h$fcn%+*78jdhetg0ui-%38wz'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True' and not os.getenv('RAILWAY_ENVIRONMENT')
 
 ALLOWED_HOSTS = ['*']
 
