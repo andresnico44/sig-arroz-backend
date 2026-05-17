@@ -1,6 +1,6 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from .models import Perfil, Finca, Lote
+from .models import Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo
 from rest_framework import serializers
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -66,10 +66,11 @@ class RegistroUsuarioSerializer(serializers.ModelSerializer):
 class FincaSerializer(serializers.ModelSerializer):
     # Campo de solo lectura para facilitar el renderizado en React
     productor_nombre = serializers.SerializerMethodField()
+    productor_id = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = Finca
-        fields = ('id', 'productor', 'productor_nombre', 'nombre', 'ubicacion_departamento', 'ubicacion_municipio', 'area_total_ha')
+        fields = ('id', 'productor', 'productor_nombre', 'productor_id', 'nombre', 'ubicacion_departamento', 'ubicacion_municipio', 'area_total_ha')
         # El productor se asigna automáticamente en el View, nadie puede falsificar este ID en el JSON
         read_only_fields = ('productor',)
 
@@ -107,3 +108,47 @@ class LoteSerializer(serializers.ModelSerializer):
                     "area_hectareas": f"El área del lote ({area_lote} ha) no puede superar el área total de la finca '{finca.nombre}' ({finca.area_total_ha} ha)."
                 })
         return data
+
+# =========================================================================
+# SPRINT 2: GESTIÓN DE ANÁLISIS DE SUELO Y CICLOS PRODUCTIVOS
+# =========================================================================
+
+class AnalisisSueloSerializer(serializers.ModelSerializer):
+    # Campo calculado para que el frontend no tenga que procesar la acidez en React
+    interpretacion_ph = serializers.SerializerMethodField()
+    lote_nombre = serializers.ReadOnlyField(source='lote.nombre')
+
+    class Meta:
+        model = AnalisisSuelo
+        fields = ('id', 'lote', 'lote_nombre', 'fecha_muestreo', 'ph', 'materia_organica_porcentaje', 'fosforo_ppm', 'potasio_ppm', 'textura_suelo', 'laboratorio', 'interpretacion_ph')
+
+    def get_interpretacion_ph(self, obj):
+        ph = float(obj.ph)
+        if ph < 5.5:
+            return "Fuerte Ácido (Requiere enmienda caliza)"
+        elif 5.5 <= ph < 6.0:
+            return "Moderadamente Ácido"
+        elif 6.0 <= ph <= 7.0:
+            return "Neutro (Óptimo para arroz)"
+        else:
+            return "Alcalino"
+
+    def validate_ph(self, value):
+        if value < 0 or value > 14:
+            raise serializers.ValidationError("El nivel de pH debe estar en el rango de 0 a 14.")
+        return value
+
+
+class CicloProductivoSerializer(serializers.ModelSerializer):
+    lote_nombre = serializers.ReadOnlyField(source='lote.nombre')
+    finca_nombre = serializers.ReadOnlyField(source='lote.finca.nombre')
+
+    class Meta:
+        model = CicloProductivo
+        fields = ('id', 'lote', 'lote_nombre', 'finca_nombre', 'nombre_ciclo', 'anio', 'semestre', 'variedad_arroz', 'presupuesto_estimado', 'estado', 'fecha_inicio_real', 'fecha_fin_real')
+
+    def validate_presupuesto_estimado(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El presupuesto estimado no puede ser un valor negativo.")
+        return value
+

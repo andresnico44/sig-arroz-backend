@@ -2,12 +2,14 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
-from arroz.views import CustomTokenObtainPairView, RegistroUsuarioView, FincaViewSet, LoteViewSet
+from arroz.views import CustomTokenObtainPairView, RegistroUsuarioView, FincaViewSet, LoteViewSet, AnalisisSueloViewSet, CicloProductivoViewSet, ProductoresListView
 
 # Enrutador principal del Sprint 2 para generar automáticamente los endpoints CRUD
 router = DefaultRouter()
 router.register(r'fincas', FincaViewSet, basename='finca')
 router.register(r'lotes', LoteViewSet, basename='lote')
+router.register(r'analisis-suelos', AnalisisSueloViewSet, basename='analisissuelo')
+router.register(r'ciclos', CicloProductivoViewSet, basename='cicloproductivo')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -18,6 +20,7 @@ urlpatterns = [
     
     # Módulo 2: Usuarios y Roles (Registro y Recuperación)
     path('api/users/register/', RegistroUsuarioView.as_view(), name='user_register'),
+    path('api/productores/', ProductoresListView.as_view(), name='lista_productores'),
     path('api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
     
     # Módulo 3: Gestión de Cultivo (Sprint 2 - Fincas y Lotes)

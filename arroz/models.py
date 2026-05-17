@@ -126,9 +126,8 @@ class CicloProductivo(models.Model):
         if not self.pk: # Si es un nuevo ciclo
             # Validar si el lote ya tiene un ciclo activo
             if self.lote.estado in ['PREPARACION', 'EN_CICLO']:
-                raise ValidationError(
-                    "El lote seleccionado posee un ciclo en ejecución. Debe cerrar el ciclo actual antes de iniciar uno nuevo."
-                )
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"detail": "El lote seleccionado ya posee un ciclo en ejecución. Debe cerrar el ciclo actual antes de iniciar uno nuevo."})
             
             # Cambiar automáticamente el estado del lote a "En Preparación" al planificar el ciclo
             self.lote.estado = 'PREPARACION'

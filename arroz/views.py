@@ -4,9 +4,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
-from .serializers import CustomTokenObtainPairSerializer, RegistroUsuarioSerializer, FincaSerializer, LoteSerializer
-from .models import Finca, Lote
-from .permissions import IsProductorDueñoOrReadOnly
+from .serializers import (CustomTokenObtainPairSerializer, RegistroUsuarioSerializer, 
+                          FincaSerializer, LoteSerializer, AnalisisSueloSerializer, CicloProductivoSerializer)
+from .models import Finca, Lote, AnalisisSuelo, CicloProductivo
+from .permissions import IsProductorDueñoOrReadOnly, IsProductorOrAdminOnlyForCiclos, IsProductorOrTecnicoOrAdminForAnalisis
 
 # Vista para el Login
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -47,6 +48,18 @@ class PasswordResetRequestView(APIView):
 # SPRINT 2: CONTROLADORES DE GESTIÓN DE CULTIVO (FINCAS Y LOTES)
 # =========================================================================
 
+class ProductoresListView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # Solo el ADMIN debería consultar toda la lista de productores para asignar fincas
+        if request.user.perfil.rol != 'ADMIN':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Solo los administradores pueden listar a los productores.")
+            
+        productores = User.objects.filter(perfil__rol='PRODUCTOR').values('id', 'first_name', 'last_name', 'email')
+        return Response(list(productores), status=status.HTTP_200_OK)
+
 class FincaViewSet(viewsets.ModelViewSet):
     serializer_class = FincaSerializer
     permission_classes = [IsAuthenticated, IsProductorDueñoOrReadOnly]
@@ -61,8 +74,20 @@ class FincaViewSet(viewsets.ModelViewSet):
         return Finca.objects.filter(productor=user).order_by('-id')
 
     def perform_create(self, serializer):
-        # Asignación segura del dueño: Se inyecta el productor desde el Token JWT
-        serializer.save(productor=self.request.user)
+        user = self.request.user
+        productor_id = self.request.data.get('productor_id', None)
+        
+        # Si es Administrador y selecciona un Productor desde el Frontend
+        if user.perfil.rol == 'ADMIN' and productor_id:
+            try:
+                productor_real = User.objects.get(id=productor_id, perfil__rol='PRODUCTOR')
+                serializer.save(productor=productor_real)
+                return
+            except User.DoesNotExist:
+                pass # Si falla, caerá al comportamiento por defecto abajo
+                
+        # Comportamiento por defecto (El Productor se la asigna a sí mismo)
+        serializer.save(productor=user)
 
 
 class LoteViewSet(viewsets.ModelViewSet):
@@ -93,4 +118,71 @@ class LoteViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Acción denegada: No tienes permiso para agregar lotes a una finca que no es de tu propiedad.")
         
+        serializer.save()
+
+
+class AnalisisSueloViewSet(viewsets.ModelViewSet):
+    serializer_class = AnalisisSueloSerializer
+    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForAnalisis]
+
+    def get_queryset(self):
+        user = self.request.user
+        lote_id = self.request.query_params.get('lote_id', None)
+
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            queryset = AnalisisSuelo.objects.all().order_by('-fecha_muestreo')
+        else:
+            # Privacidad estricta: Solo ver análisis de lotes que pertenecen al productor
+            queryset = AnalisisSuelo.objects.filter(lote__finca__productor=user).order_by('-fecha_muestreo')
+
+        if lote_id:
+            queryset = queryset.filter(lote_id=lote_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        lote = serializer.validated_data['lote']
+        user = self.request.user
+
+        # Seguridad: El productor solo puede añadir análisis a sus propios lotes
+        if user.perfil.rol == 'PRODUCTOR' and lote.finca.productor != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Acción Denegada: El lote al que intentas agregar el análisis de suelo no te pertenece.")
+
+        serializer.save()
+
+
+class CicloProductivoViewSet(viewsets.ModelViewSet):
+    serializer_class = CicloProductivoSerializer
+    permission_classes = [IsAuthenticated, IsProductorOrAdminOnlyForCiclos]
+
+    def get_queryset(self):
+        user = self.request.user
+        lote_id = self.request.query_params.get('lote_id', None)
+
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            queryset = CicloProductivo.objects.all().order_by('-id')
+        else:
+            # Privacidad: El productor solo ve ciclos de sus propios lotes
+            queryset = CicloProductivo.objects.filter(lote__finca__productor=user).order_by('-id')
+
+        if lote_id:
+            queryset = queryset.filter(lote_id=lote_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        lote = serializer.validated_data['lote']
+
+        # Validación 1: Verificar el rol del usuario (Matriz de Permisos)
+        if user.perfil.rol == 'TECNICO':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Permiso Denegado: Los asesores técnicos no tienen autorización para iniciar ciclos productivos.")
+
+        # Validación 2: Verificar la propiedad del lote
+        if user.perfil.rol == 'PRODUCTOR' and lote.finca.productor != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Acción Denegada: El lote seleccionado no pertenece a tus fincas.")
+
         serializer.save()
