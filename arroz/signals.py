@@ -1,40 +1,38 @@
 import socket
 import json
 import urllib.request
-from django.dispatch import receiver
-from django.conf import settings
+import django.dispatch
+import django.conf
 # pyrefly: ignore [missing-import]
-from django_rest_passwordreset.signals import reset_password_token_created
+import django_rest_passwordreset.signals
 
-@receiver(reset_password_token_created)
+@django.dispatch.receiver(django_rest_passwordreset.signals.reset_password_token_created)
 def password_reset_token_created(sender, instance, reset_password_token, *args, **kwargs):
-        reset_url = f"https://sig-arroz-frontend.vercel.app/reset-password?token={reset_password_token.key}"
-        subject = "Recuperacion de Contrasena - SIG-ARROZ"
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sig-arroz.com')
-        to_email = reset_password_token.user.email
-        text_content = (
-                    f"Hola,\n\n"
-                    f"Hemos recibido una solicitud para restablecer tu contrasena en SIG-ARROZ.\n"
-                    f"Haz clic en el siguiente enlace para crear una nueva contrasena:\n"
-                    f"{reset_url}\n\n"
-                    f"Si no solicitaste este cambio, puedes ignorar este correo.\n\n"
-                    f"Saludos,\nEl equipo de SIG-ARROZ"
-        )
-
-    html_content = f"""
-        <html>
+            reset_url = f"https://sig-arroz-frontend.vercel.app/reset-password?token={reset_password_token.key}"
+            subject = "Recuperacion de Contrasena - SIG-ARROZ"
+            from_email = getattr(django.conf.settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sig-arroz.com')
+            to_email = reset_password_token.user.email
+            text_content = (
+                f"Hola,\n\n"
+                f"Hemos recibido una solicitud para restablecer tu contrasena en SIG-ARROZ.\n"
+                f"Haz clic en el siguiente enlace para crear una nueva contrasena:\n"
+                f"{reset_url}\n\n"
+                f"Si no solicitaste este cambio, puedes ignorar este correo.\n\n"
+                f"Saludos,\nEl equipo de SIG-ARROZ"
+            )
+            html_content = f"""
+            <html>
             <body>
-                    <h2>SIG-ARROZ</h2>
-                            <p>Hola,</p>
-                                    <p>Hemos recibido una solicitud para restablecer tu contrasena.</p>
-                                            <p><a href="{reset_url}" style="background:#10b981;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;">Restablecer Contrasena</a></p>
-        <p>Si no solicitaste este cambio, ignora este correo.</p>
+                <h2>SIG-ARROZ</h2>
+                <p>Hola,</p>
+                <p>Hemos recibido una solicitud para restablecer tu contrasena.</p>
+                <p><a href="{reset_url}" style="background:#10b981;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;">Restablecer Contrasena</a></p>
+                <p>Si no solicitaste este cambio, ignora este correo.</p>
     </body>
     </html>
     """
-
         # Brevo API configuration
-            api_key = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+            api_key = getattr(django.conf.settings, 'EMAIL_HOST_PASSWORD', '')
                 url = "https://api.brevo.com/v3/smtp/email"
 
                         payload = {
