@@ -117,10 +117,11 @@ class AnalisisSueloSerializer(serializers.ModelSerializer):
     # Campo calculado para que el frontend no tenga que procesar la acidez en React
     interpretacion_ph = serializers.SerializerMethodField()
     lote_nombre = serializers.ReadOnlyField(source='lote.nombre')
+    laboratorio = serializers.CharField(required=False, allow_blank=True, default='Laboratorio General')
 
     class Meta:
         model = AnalisisSuelo
-        fields = ('id', 'lote', 'lote_nombre', 'fecha_muestreo', 'ph', 'materia_organica_porcentaje', 'fosforo_ppm', 'potasio_ppm', 'textura_suelo', 'laboratorio', 'interpretacion_ph')
+        fields = ('id', 'lote', 'lote_nombre', 'fecha_muestreo', 'ph', 'materia_organica_porcentaje', 'fosforo_ppm', 'potasio_meq', 'textura', 'laboratorio', 'interpretacion_ph')
 
     def get_interpretacion_ph(self, obj):
         ph = float(obj.ph)
