@@ -89,6 +89,21 @@ class FincaViewSet(viewsets.ModelViewSet):
         # Comportamiento por defecto (El Productor se la asigna a sí mismo)
         serializer.save(productor=user)
 
+    def perform_update(self, serializer):
+        user = self.request.user
+        productor_id = self.request.data.get('productor_id', None)
+        
+        # Si es Administrador y selecciona un Productor desde el Frontend
+        if user.perfil.rol == 'ADMIN' and productor_id:
+            try:
+                productor_real = User.objects.get(id=productor_id, perfil__rol='PRODUCTOR')
+                serializer.save(productor=productor_real)
+                return
+            except User.DoesNotExist:
+                pass # Si falla, se actualizará conservando el actual
+                
+        serializer.save()
+
 
 class LoteViewSet(viewsets.ModelViewSet):
     serializer_class = LoteSerializer
@@ -130,10 +145,10 @@ class AnalisisSueloViewSet(viewsets.ModelViewSet):
         lote_id = self.request.query_params.get('lote_id', None)
 
         if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = AnalisisSuelo.objects.all().order_by('-fecha_muestreo')
+            queryset = AnalisisSuelo.objects.all().order_by('-fecha_muestreo', '-id')
         else:
             # Privacidad estricta: Solo ver análisis de lotes que pertenecen al productor
-            queryset = AnalisisSuelo.objects.filter(lote__finca__productor=user).order_by('-fecha_muestreo')
+            queryset = AnalisisSuelo.objects.filter(lote__finca__productor=user).order_by('-fecha_muestreo', '-id')
 
         if lote_id:
             queryset = queryset.filter(lote_id=lote_id)
