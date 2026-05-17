@@ -1,0 +1,29 @@
+from rest_framework import permissions
+
+class IsProductorDueñoOrReadOnly(permissions.BasePermission):
+    """
+    Permite acceso de lectura a los Técnicos y Administradores.
+    Pero sólo permite crear, editar o eliminar a los Productores que son dueños del objeto.
+    """
+
+    def has_permission(self, request, view):
+        # Todos los autenticados pueden intentar (filtraremos la lista de visión en get_queryset)
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        # Los administradores tienen el control absoluto de todo
+        if request.user.perfil.rol == 'ADMIN':
+            return True
+            
+        # Si la petición es de solo lectura (GET, HEAD, OPTIONS)
+        if request.method in permissions.SAFE_METHODS:
+            # Los técnicos y los dueños pueden leer sin problema
+            return True
+            
+        # Si es escritura (PUT, PATCH, DELETE), debe ser estrictamente el dueño Productor
+        if hasattr(obj, 'productor'): # Para la entidad Finca
+            return obj.productor == request.user
+        elif hasattr(obj, 'finca'): # Para la entidad Lote
+            return obj.finca.productor == request.user
+            
+        return False

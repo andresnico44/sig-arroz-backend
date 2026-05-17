@@ -1,10 +1,12 @@
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework import generics, status
+from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
-from .serializers import CustomTokenObtainPairSerializer, RegistroUsuarioSerializer
+from .serializers import CustomTokenObtainPairSerializer, RegistroUsuarioSerializer, FincaSerializer, LoteSerializer
+from .models import Finca, Lote
+from .permissions import IsProductorDueñoOrReadOnly
 
 # Vista para el Login
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -40,3 +42,55 @@ class PasswordResetRequestView(APIView):
         return Response({
             'message': 'Si el correo existe en nuestra base de datos, te enviaremos instrucciones para restablecer tu contraseña.'
         }, status=status.HTTP_200_OK)
+
+# =========================================================================
+# SPRINT 2: CONTROLADORES DE GESTIÓN DE CULTIVO (FINCAS Y LOTES)
+# =========================================================================
+
+class FincaViewSet(viewsets.ModelViewSet):
+    serializer_class = FincaSerializer
+    permission_classes = [IsAuthenticated, IsProductorDueñoOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Técnicos y Administradores pueden visualizar todas las fincas
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            return Finca.objects.all().order_by('-id')
+        
+        # Un PRODUCTOR solo puede listar sus propias fincas (Privacidad de datos)
+        return Finca.objects.filter(productor=user).order_by('-id')
+
+    def perform_create(self, serializer):
+        # Asignación segura del dueño: Se inyecta el productor desde el Token JWT
+        serializer.save(productor=self.request.user)
+
+
+class LoteViewSet(viewsets.ModelViewSet):
+    serializer_class = LoteSerializer
+    permission_classes = [IsAuthenticated, IsProductorDueñoOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Soporte para filtrar lotes visualizando una finca específica en el frontend
+        finca_id = self.request.query_params.get('finca_id', None)
+        
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            queryset = Lote.objects.all().order_by('-id')
+        else:
+            # Privacidad: El PRODUCTOR solo ve los lotes de las fincas que le pertenecen
+            queryset = Lote.objects.filter(finca__productor=user).order_by('-id')
+            
+        if finca_id:
+            queryset = queryset.filter(finca_id=finca_id)
+            
+        return queryset
+
+    def perform_create(self, serializer):
+        finca = serializer.validated_data['finca']
+        # Medida de Ciberseguridad Definitiva: 
+        # Evitar que un productor malicioso con conocimientos de API inserte un lote en la finca de un competidor
+        if finca.productor != self.request.user and self.request.user.perfil.rol != 'ADMIN':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Acción denegada: No tienes permiso para agregar lotes a una finca que no es de tu propiedad.")
+        
+        serializer.save()
