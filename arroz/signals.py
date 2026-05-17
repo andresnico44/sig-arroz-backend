@@ -86,15 +86,21 @@ def password_reset_token_created(sender, instance, reset_password_token, *args, 
     # ---------------------------------------------------------
     # COMPORTAMIENTO HÍBRIDO DEFINITIVO: CORREOS REALES EN AMBOS
     # ---------------------------------------------------------
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Este log se imprimirá AL INSTANTE en Railway y nos confirmará si la señal arrancó
+    logger.info(f"🟢 [SIGNAL TRIGGERED] Iniciando proceso de envío para: {to_email} (DEBUG={settings.DEBUG})")
+
     if settings.DEBUG:
         # En LOCAL: Envía el correo real usando el SMTP tradicional de Django
         msg = EmailMultiAlternatives(subject, text_content, from_email, [to_email])
         msg.attach_alternative(html_content, "text/html")
         try:
             msg.send()
-            print(f"📧 [EMAIL SUCCESS] Correo real enviado localmente a: {to_email} (vía SMTP)")
+            logger.info(f"📧 [EMAIL SUCCESS] Correo SMTP local enviado a: {to_email}")
         except Exception as e:
-            print(f"❌ [EMAIL ERROR] No se pudo enviar el correo SMTP en local: {e}")
+            logger.error(f"❌ [EMAIL ERROR] No se pudo enviar el correo SMTP en local: {e}")
     else:
         # En PRODUCCIÓN (Railway): Envía el correo real usando la API HTTP de Brevo (Bypass de bloqueo)
         import requests
@@ -115,14 +121,17 @@ def password_reset_token_created(sender, instance, reset_password_token, *args, 
             "content-type": "application/json"
         }
         
+        logger.info(f"📧 [API BREVO] Enviando petición HTTP a Brevo. Remitente: {from_email}")
+        
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             if response.status_code in [200, 201, 202]:
-                print(f"📧 [EMAIL SUCCESS] Correo real enviado en producción a: {to_email} vía API HTTP")
+                logger.info(f"📧 [EMAIL SUCCESS] Correo real enviado en producción a: {to_email} vía API HTTP")
             else:
-                print(f"❌ [EMAIL ERROR] Error Brevo API en producción: {response.status_code} - {response.text}")
+                logger.error(f"❌ [EMAIL ERROR] Error Brevo API en producción: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"❌ [EMAIL ERROR] Caída de red en producción al enviar HTTP: {e}")
+            logger.exception(f"❌ [EMAIL ERROR] Caída de red en producción al enviar HTTP: {e}")
+
 
 
 
