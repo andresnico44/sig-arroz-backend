@@ -1,3 +1,4 @@
+import socket
 from django.core.mail import EmailMultiAlternatives
 from django.dispatch import receiver
 from django.urls import reverse
@@ -10,8 +11,11 @@ def password_reset_token_created(sender, instance, reset_password_token, *args, 
     """
     Envía un correo real con el enlace de recuperación y un diseño HTML espectacular
     """
+    # Establecer un tiempo límite de conexión de 5 segundos para evitar cuelgues del servidor Gunicorn
+    socket.setdefaulttimeout(5)
+
     # Enlace hacia la ruta del Frontend React
-    reset_url = f"http://localhost:5173/reset-password?token={reset_password_token.key}"
+    reset_url = f"https://sig-arroz-frontend.vercel.app/reset-password?token={reset_password_token.key}"
 
     # Detalles del Correo
     subject = "Recuperación de Contraseña - SIG-ARROZ 🌾"
@@ -79,4 +83,10 @@ def password_reset_token_created(sender, instance, reset_password_token, *args, 
     # Generación y Envío del Correo Real
     msg = EmailMultiAlternatives(subject, text_content, from_email, [to_email])
     msg.attach_alternative(html_content, "text/html")
-    msg.send()
+    
+    try:
+        msg.send()
+        print(f"📧 [EMAIL SUCCESS] Correo enviado a: {to_email}")
+    except Exception as e:
+        print(f"❌ [EMAIL ERROR] No se pudo enviar el correo a {to_email} por SMTP. Detalle: {e}")
+
