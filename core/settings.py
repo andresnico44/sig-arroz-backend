@@ -43,6 +43,13 @@ INSTALLED_APPS = [
     
     # App local del proyecto
     'arroz',
+    
+    # Simple JWT
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    
+    # Recuperación de Clave
+    'django_rest_passwordreset',
 ]
 
 MIDDLEWARE = [
@@ -128,3 +135,32 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+
+# REST Framework Configuration (JWT)
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated', # Protege los endpoints globalmente
+    )
+}
+
+# Configuración de los Tokens JWT (Tiempos de expiración)
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), # 1 día para el token de acceso
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7), # 7 días para renovar
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# Configuración del Servidor de Correos (Brevo SMTP)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@sig-arroz.com')
