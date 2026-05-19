@@ -268,5 +268,72 @@ class RegistroHidricoSerializer(serializers.ModelSerializer):
         model = RegistroHidrico
         fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'volumen_agua_m3', 'fuente_hidrica', 'fuente_hidrica_display', 'costo_bombeo', 'dias_inundacion', 'lamina_agua_cm', 'estado_drenaje', 'estado_drenaje_display')
 
+class UserGestionSerializer(serializers.ModelSerializer):
+    nombre_completo = serializers.SerializerMethodField(read_only=True)
+    nombre_completo_input = serializers.CharField(write_only=True, required=False)
+    rol = serializers.CharField(required=False)
+    telefono = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ('id', 'nombre_completo', 'nombre_completo_input', 'email', 'rol', 'telefono', 'is_active', 'password')
+
+    def get_nombre_completo(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() if (obj.first_name or obj.last_name) else obj.username
+
+    def create(self, validated_data):
+        nombre_completo = validated_data.pop('nombre_completo_input', '').strip()
+        email = validated_data.get('email')
+        rol = validated_data.pop('rol', 'TECNICO')
+        telefono = validated_data.pop('telefono', '')
+        
+        # Dividir nombre y apellido
+        parts = nombre_completo.split(' ', 1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ''
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            password=validated_data.get('password', 'Arroz123*')
+        )
+        # Crear perfil
+        Perfil.objects.create(user=user, rol=rol, telefono=telefono)
+        return user
+
+    def update(self, instance, validated_data):
+        nombre_completo = validated_data.pop('nombre_completo_input', None)
+        if nombre_completo is not None:
+            parts = nombre_completo.strip().split(' ', 1)
+            instance.first_name = parts[0]
+            instance.last_name = parts[1] if len(parts) > 1 else ''
+            
+        instance.email = validated_data.get('email', instance.email)
+        instance.username = instance.email # Mantener sincronizado
+        
+        password = validated_data.get('password', None)
+        if password:
+            instance.set_password(password)
+            
+        instance.is_active = validated_data.get('is_active', instance.is_active)
+        instance.save()
+        
+        # Perfil
+        rol = validated_data.pop('rol', None)
+        telefono = validated_data.pop('telefono', None)
+        
+        perfil = instance.perfil
+        if rol is not None:
+            perfil.rol = rol
+        if telefono is not None:
+            perfil.telefono = telefono
+        perfil.save()
+            
+        return instance
+
+
 
 

@@ -6,7 +6,7 @@ from arroz.views import (CustomTokenObtainPairView, RegistroUsuarioView, FincaVi
                          AnalisisSueloViewSet, CicloProductivoViewSet, ProductoresListView,
                          PreparacionMaquinariaViewSet, SiembraViewSet, SeguimientoFenologicoViewSet,
                          RegistroCostoViewSet, MonitoreoFitosanitarioViewSet, FertilizacionViewSet,
-                         AplicacionAgroquimicoViewSet, RegistroHidricoViewSet)
+                         AplicacionAgroquimicoViewSet, RegistroHidricoViewSet, UserGestionViewSet, AdminMetricsView)
 
 # Enrutador principal del Sprint 2 y 3 para generar automáticamente los endpoints CRUD
 router = DefaultRouter()
@@ -26,6 +26,7 @@ router.register(r'monitoreos', MonitoreoFitosanitarioViewSet, basename='monitore
 router.register(r'fertilizaciones', FertilizacionViewSet, basename='fertilizacion')
 router.register(r'aplicaciones-agroquimicos', AplicacionAgroquimicoViewSet, basename='aplicacionagroquimico')
 router.register(r'riegos', RegistroHidricoViewSet, basename='riego')
+router.register(r'users-gestion', UserGestionViewSet, basename='users-gestion')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -38,6 +39,7 @@ urlpatterns = [
     path('api/users/register/', RegistroUsuarioView.as_view(), name='user_register'),
     path('api/productores/', ProductoresListView.as_view(), name='lista_productores'),
     path('api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
+    path('api/admin/metrics/', AdminMetricsView.as_view(), name='admin_metrics'),
     
     # Módulo 3: Gestión de Cultivo (Sprint 2 - Fincas y Lotes)
     path('api/', include(router.urls)),

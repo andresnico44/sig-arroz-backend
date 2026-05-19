@@ -8,11 +8,11 @@ from .serializers import (CustomTokenObtainPairSerializer, RegistroUsuarioSerial
                           FincaSerializer, LoteSerializer, AnalisisSueloSerializer, CicloProductivoSerializer,
                           PreparacionMaquinariaSerializer, SiembraSerializer, SeguimientoFenologicoSerializer,
                           RegistroCostoSerializer, MonitoreoFitosanitarioSerializer, FertilizacionSerializer,
-                          AplicacionAgroquimicoSerializer, RegistroHidricoSerializer)
-from .models import (Finca, Lote, AnalisisSuelo, CicloProductivo, PreparacionMaquinaria, Siembra, 
+                          AplicacionAgroquimicoSerializer, RegistroHidricoSerializer, UserGestionSerializer)
+from .models import (Finca, Lote, AnalisisSuelo, CicloProductivo, Perfil, PreparacionMaquinaria, Siembra, 
                      SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
                      AplicacionAgroquimico, RegistroHidrico)
-from .permissions import IsProductorDueñoOrReadOnly, IsProductorOrAdminOnlyForCiclos, IsProductorOrTecnicoOrAdminForAnalisis, IsProductorOrTecnicoOrAdminForLabores
+from .permissions import IsProductorDueñoOrReadOnly, IsProductorOrAdminOnlyForCiclos, IsProductorOrTecnicoOrAdminForAnalisis, IsProductorOrTecnicoOrAdminForLabores, IsAdminUserOnly
 
 # Vista para el Login
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -447,3 +447,42 @@ class RegistroHidricoViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar riego no te pertenece.")
 
         serializer.save()
+
+class UserGestionViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by('id')
+    serializer_class = UserGestionSerializer
+    permission_classes = [IsAdminUserOnly]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance == request.user:
+            return Response({"error": "No puedes eliminar tu propio usuario administrador."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
+class AdminMetricsView(APIView):
+    permission_classes = [IsAdminUserOnly]
+
+    def get(self, request):
+        total_usuarios = User.objects.count()
+        admins = Perfil.objects.filter(rol='ADMIN').count()
+        productores = Perfil.objects.filter(rol='PRODUCTOR').count()
+        tecnicos = Perfil.objects.filter(rol='TECNICO').count()
+        
+        total_fincas = Finca.objects.count()
+        total_lotes = Lote.objects.count()
+        total_ciclos = CicloProductivo.objects.count()
+        ciclos_activos = CicloProductivo.objects.filter(estado='EJECUCION').count()
+        
+        return Response({
+            'total_usuarios': total_usuarios,
+            'roles': {
+                'ADMIN': admins,
+                'PRODUCTOR': productores,
+                'TECNICO': tecnicos
+            },
+            'total_fincas': total_fincas,
+            'total_lotes': total_lotes,
+            'total_ciclos': total_ciclos,
+            'ciclos_activos': ciclos_activos
+        }, status=status.HTTP_200_OK)
+
