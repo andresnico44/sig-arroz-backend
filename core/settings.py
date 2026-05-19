@@ -61,7 +61,10 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
-CSRF_TRUSTED_ORIGINS = ['https://sig-arroz-frontend.vercel.app']
+CSRF_TRUSTED_ORIGINS = [
+    'https://sig-arroz-frontend.vercel.app',
+    'https://sig-arroz-frontend-20.vercel.app'
+]
 
 ROOT_URLCONF = 'core.urls'
 
