@@ -1,6 +1,8 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from .models import Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo
+from .models import (Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo, PreparacionMaquinaria, Siembra, 
+                     SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
+                     AplicacionAgroquimico, RegistroHidrico)
 from rest_framework import serializers
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -152,4 +154,119 @@ class CicloProductivoSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("El presupuesto estimado no puede ser un valor negativo.")
         return value
+
+# =========================================================================
+# SPRINT 2: OPERACIONES DE ESTABLECIMIENTO DEL CULTIVO
+# =========================================================================
+
+class PreparacionMaquinariaSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+
+    class Meta:
+        model = PreparacionMaquinaria
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'labor', 'horas_maquina', 'combustible_galones', 'costo_hora', 'costo_total', 'observaciones')
+        read_only_fields = ('costo_total',)
+
+    def validate_horas_maquina(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Las horas de máquina no pueden ser negativas.")
+        return value
+
+
+class SiembraSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+
+    class Meta:
+        model = Siembra
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'metodo', 'variedad', 'dosis_kg_ha', 'tratamiento_semilla', 'germinacion_porcentaje')
+
+    def validate_germinacion_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de germinación debe estar entre 0 y 100.")
+        return value
+
+    def validate_dosis_kg_ha(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("La dosis de siembra debe ser mayor a 0.")
+        return value
+
+
+class SeguimientoFenologicoSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    
+    class Meta:
+        model = SeguimientoFenologico
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'fase', 'dias_transcurridos_calculados', 'observaciones', 'fotografia')
+        read_only_fields = ('dias_transcurridos_calculados',)
+
+
+# =========================================================================
+# SPRINT 3: GESTIÓN DE SANIDAD, NUTRICIÓN, MANEJO HÍDRICO Y BILLETERA
+# =========================================================================
+
+class RegistroCostoSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    categoria_display = serializers.CharField(source='get_categoria_display', read_only=True)
+
+    class Meta:
+        model = RegistroCosto
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'categoria', 'categoria_display', 'descripcion', 'monto_total')
+
+    def validate_monto_total(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El monto total del costo no puede ser negativo.")
+        return value
+
+
+class MonitoreoFitosanitarioSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    tipo_problema_display = serializers.CharField(source='get_tipo_problema_display', read_only=True)
+
+    class Meta:
+        model = MonitoreoFitosanitario
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'tipo_problema', 'tipo_problema_display', 'nombre_comun', 'umbral_danio_porcentaje', 'decision_tecnica', 'latitud', 'longitud')
+
+    def validate_umbral_danio_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El umbral de daño debe estar entre 0% y 100%.")
+        return value
+
+
+class FertilizacionSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+
+    class Meta:
+        model = Fertilizacion
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'etapa_fenologica', 'tipo_fertilizante', 'fuente_comercial', 'dosis_kg_ha', 'costo_producto', 'costo_mano_obra')
+
+    def validate_dosis_kg_ha(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("La dosis aplicada debe ser mayor a 0 kg/ha.")
+        return value
+
+
+class AplicacionAgroquimicoSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    monitoreo_nombre = serializers.ReadOnlyField(source='monitoreo.nombre_comun')
+
+    class Meta:
+        model = AplicacionAgroquimico
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'monitoreo', 'monitoreo_nombre', 'fecha', 'nombre_comercial', 'ingrediente_activo', 'dosis_por_ha', 'equipo_aspersion', 'temperatura_c', 'velocidad_viento_kmh', 'periodo_carencia_dias', 'costo_producto', 'costo_mano_obra')
+
+    def validate_periodo_carencia_dias(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El periodo de carencia no puede ser negativo.")
+        return value
+
+
+class RegistroHidricoSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    fuente_hidrica_display = serializers.CharField(source='get_fuente_hidrica_display', read_only=True)
+    estado_drenaje_display = serializers.CharField(source='get_estado_drenaje_display', read_only=True)
+
+    class Meta:
+        model = RegistroHidrico
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'volumen_agua_m3', 'fuente_hidrica', 'fuente_hidrica_display', 'costo_bombeo', 'dias_inundacion', 'lamina_agua_cm', 'estado_drenaje', 'estado_drenaje_display')
+
+
 

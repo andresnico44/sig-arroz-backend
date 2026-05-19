@@ -70,3 +70,21 @@ class IsProductorOrTecnicoOrAdminForAnalisis(permissions.BasePermission):
             
         return False
 
+class IsProductorOrTecnicoOrAdminForLabores(permissions.BasePermission):
+    """
+    Matriz de Permisos (Sprint 2 - Labores, Siembra, Fenología):
+    - ADMIN, PRODUCTOR (dueño) y TECNICO pueden hacer CRUD completo.
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.perfil.rol in ['ADMIN', 'TECNICO']:
+            return True
+            
+        if request.user.perfil.rol == 'PRODUCTOR':
+            return obj.ciclo.lote.finca.productor == request.user
+            
+        return False
+
+

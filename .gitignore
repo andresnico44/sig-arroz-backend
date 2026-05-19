@@ -1,2 +1,10 @@
 venv/
 .env
+db.sqlite3
+__pycache__/
+*.pyc
+*.webp
+*.png
+*.jpg
+*.jpeg
+.tempmediaStorage/

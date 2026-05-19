@@ -2,14 +2,30 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
-from arroz.views import CustomTokenObtainPairView, RegistroUsuarioView, FincaViewSet, LoteViewSet, AnalisisSueloViewSet, CicloProductivoViewSet, ProductoresListView
+from arroz.views import (CustomTokenObtainPairView, RegistroUsuarioView, FincaViewSet, LoteViewSet, 
+                         AnalisisSueloViewSet, CicloProductivoViewSet, ProductoresListView,
+                         PreparacionMaquinariaViewSet, SiembraViewSet, SeguimientoFenologicoViewSet,
+                         RegistroCostoViewSet, MonitoreoFitosanitarioViewSet, FertilizacionViewSet,
+                         AplicacionAgroquimicoViewSet, RegistroHidricoViewSet)
 
-# Enrutador principal del Sprint 2 para generar automáticamente los endpoints CRUD
+# Enrutador principal del Sprint 2 y 3 para generar automáticamente los endpoints CRUD
 router = DefaultRouter()
 router.register(r'fincas', FincaViewSet, basename='finca')
 router.register(r'lotes', LoteViewSet, basename='lote')
 router.register(r'analisis-suelos', AnalisisSueloViewSet, basename='analisissuelo')
 router.register(r'ciclos', CicloProductivoViewSet, basename='cicloproductivo')
+
+# Módulo 5, 7, 8: Establecimiento y Fenología (Sprint 2)
+router.register(r'preparacion', PreparacionMaquinariaViewSet, basename='preparacion')
+router.register(r'siembra', SiembraViewSet, basename='siembra')
+router.register(r'fenologia', SeguimientoFenologicoViewSet, basename='fenologia')
+
+# Módulo 9, 10, 13: Sanidad, Nutrición, Riego y Costos (Sprint 3)
+router.register(r'costos', RegistroCostoViewSet, basename='costo')
+router.register(r'monitoreos', MonitoreoFitosanitarioViewSet, basename='monitoreo')
+router.register(r'fertilizaciones', FertilizacionViewSet, basename='fertilizacion')
+router.register(r'aplicaciones-agroquimicos', AplicacionAgroquimicoViewSet, basename='aplicacionagroquimico')
+router.register(r'riegos', RegistroHidricoViewSet, basename='riego')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
