@@ -334,6 +334,16 @@ class UserGestionSerializer(serializers.ModelSerializer):
             
         return instance
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if hasattr(instance, 'perfil'):
+            representation['rol'] = instance.perfil.rol
+            representation['telefono'] = instance.perfil.telefono
+        else:
+            representation['rol'] = 'SIN_ROL'
+            representation['telefono'] = ''
+        return representation
+
 
 
 
