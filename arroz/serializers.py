@@ -270,11 +270,20 @@ class RegistroHidricoSerializer(serializers.ModelSerializer):
 
 class CosechaSerializer(serializers.ModelSerializer):
     ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    lote_id = serializers.ReadOnlyField(source='ciclo.lote.id')
+    lote_nombre = serializers.ReadOnlyField(source='ciclo.lote.nombre')
+    finca_id = serializers.ReadOnlyField(source='ciclo.lote.finca.id')
+    finca_nombre = serializers.ReadOnlyField(source='ciclo.lote.finca.nombre')
     rendimiento_ton_ha = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Cosecha
-        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'produccion_obtenida_kg', 'humedad_grano_porcentaje', 'impurezas_porcentaje', 'condiciones_cosecha', 'rendimiento_ton_ha')
+        fields = (
+            'id', 'ciclo', 'ciclo_nombre', 'lote_id', 'lote_nombre',
+            'finca_id', 'finca_nombre', 'fecha', 'produccion_obtenida_kg',
+            'humedad_grano_porcentaje', 'impurezas_porcentaje',
+            'condiciones_cosecha', 'rendimiento_ton_ha'
+        )
 
     def get_rendimiento_ton_ha(self, obj):
         try:

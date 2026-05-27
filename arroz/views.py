@@ -455,6 +455,8 @@ class CosechaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         ciclo_id = self.request.query_params.get('ciclo_id', None)
+        finca_id = self.request.query_params.get('finca_id', None)
+        lote_id = self.request.query_params.get('lote_id', None)
 
         if user.perfil.rol in ['ADMIN', 'TECNICO']:
             queryset = Cosecha.objects.all().order_by('-fecha', '-id')
@@ -463,6 +465,10 @@ class CosechaViewSet(viewsets.ModelViewSet):
 
         if ciclo_id:
             queryset = queryset.filter(ciclo_id=ciclo_id)
+        if finca_id:
+            queryset = queryset.filter(ciclo__lote__finca_id=finca_id)
+        if lote_id:
+            queryset = queryset.filter(ciclo__lote_id=lote_id)
 
         return queryset
 
