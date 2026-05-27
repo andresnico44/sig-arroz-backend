@@ -8,10 +8,10 @@ from .serializers import (CustomTokenObtainPairSerializer, RegistroUsuarioSerial
                           FincaSerializer, LoteSerializer, AnalisisSueloSerializer, CicloProductivoSerializer,
                           PreparacionMaquinariaSerializer, SiembraSerializer, SeguimientoFenologicoSerializer,
                           RegistroCostoSerializer, MonitoreoFitosanitarioSerializer, FertilizacionSerializer,
-                          AplicacionAgroquimicoSerializer, RegistroHidricoSerializer, UserGestionSerializer)
+                          AplicacionAgroquimicoSerializer, RegistroHidricoSerializer, UserGestionSerializer, CosechaSerializer)
 from .models import (Finca, Lote, AnalisisSuelo, CicloProductivo, Perfil, PreparacionMaquinaria, Siembra, 
                      SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
-                     AplicacionAgroquimico, RegistroHidrico)
+                     AplicacionAgroquimico, RegistroHidrico, Cosecha)
 from .permissions import IsProductorDueñoOrReadOnly, IsProductorOrAdminOnlyForCiclos, IsProductorOrTecnicoOrAdminForAnalisis, IsProductorOrTecnicoOrAdminForLabores, IsAdminUserOnly
 
 # Vista para el Login
@@ -445,6 +445,34 @@ class RegistroHidricoViewSet(viewsets.ModelViewSet):
         if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar riego no te pertenece.")
+
+        serializer.save()
+
+class CosechaViewSet(viewsets.ModelViewSet):
+    serializer_class = CosechaSerializer
+    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
+
+    def get_queryset(self):
+        user = self.request.user
+        ciclo_id = self.request.query_params.get('ciclo_id', None)
+
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            queryset = Cosecha.objects.all().order_by('-fecha', '-id')
+        else:
+            queryset = Cosecha.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
+
+        if ciclo_id:
+            queryset = queryset.filter(ciclo_id=ciclo_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        ciclo = serializer.validated_data['ciclo']
+        user = self.request.user
+
+        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar cosecha no te pertenece.")
 
         serializer.save()
 
