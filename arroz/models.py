@@ -439,4 +439,36 @@ class RegistroHidrico(models.Model):
         from .models import RegistroCosto
         desc = f"Manejo Hídrico / Riego desde {self.get_fuente_hidrica_display()}"
         RegistroCosto.objects.filter(ciclo=self.ciclo, categoria='OTROS', descripcion=desc).delete()
-        super().delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
+
+# =========================================================================
+# SPRINT 4: COSECHA Y CIERRE ECONÓMICO
+# =========================================================================
+
+# 14. Entidad Cosecha (HU-013)
+class Cosecha(models.Model):
+    ciclo = models.OneToOneField(CicloProductivo, on_delete=models.CASCADE, related_name='cosecha')
+    fecha = models.DateField()
+    produccion_obtenida_kg = models.DecimalField(max_digits=12, decimal_places=2, help_text="Producción total obtenida en Kilogramos")
+    humedad_grano_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, help_text="Porcentaje de humedad del grano al corte")
+    impurezas_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, default=0.0, help_text="Porcentaje de impurezas")
+    condiciones_cosecha = models.TextField(null=True, blank=True, help_text="Condiciones generales durante la cosecha (ej. lluvia, acame)")
+
+    class Meta:
+        db_table = 'cosecha'
+
+    def __str__(self):
+        return f"Cosecha {self.fecha} - {self.ciclo.nombre_ciclo}"
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            # Lógica de cierre al registrar la cosecha
+            self.ciclo.estado = 'COSECHADO'
+            self.ciclo.fecha_fin_real = self.fecha
+            self.ciclo.save()
+            
+            self.ciclo.lote.estado = 'COSECHADO'
+            self.ciclo.lote.save()
+            
+        super().save(*args, **kwargs)
+

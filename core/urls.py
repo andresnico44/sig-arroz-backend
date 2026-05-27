@@ -6,7 +6,8 @@ from arroz.views import (CustomTokenObtainPairView, RegistroUsuarioView, FincaVi
                          AnalisisSueloViewSet, CicloProductivoViewSet, ProductoresListView,
                          PreparacionMaquinariaViewSet, SiembraViewSet, SeguimientoFenologicoViewSet,
                          RegistroCostoViewSet, MonitoreoFitosanitarioViewSet, FertilizacionViewSet,
-                         AplicacionAgroquimicoViewSet, RegistroHidricoViewSet, UserGestionViewSet, AdminMetricsView)
+                         AplicacionAgroquimicoViewSet, RegistroHidricoViewSet, UserGestionViewSet, AdminMetricsView,
+                         CosechaViewSet)
 
 # Enrutador principal del Sprint 2 y 3 para generar automáticamente los endpoints CRUD
 router = DefaultRouter()
@@ -26,6 +27,7 @@ router.register(r'monitoreos', MonitoreoFitosanitarioViewSet, basename='monitore
 router.register(r'fertilizaciones', FertilizacionViewSet, basename='fertilizacion')
 router.register(r'aplicaciones-agroquimicos', AplicacionAgroquimicoViewSet, basename='aplicacionagroquimico')
 router.register(r'riegos', RegistroHidricoViewSet, basename='riego')
+router.register(r'cosechas', CosechaViewSet, basename='cosecha')
 router.register(r'users-gestion', UserGestionViewSet, basename='users-gestion')
 
 urlpatterns = [

@@ -2,7 +2,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .models import (Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo, PreparacionMaquinaria, Siembra, 
                      SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
-                     AplicacionAgroquimico, RegistroHidrico)
+                     AplicacionAgroquimico, RegistroHidrico, Cosecha)
 from rest_framework import serializers
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -267,6 +267,40 @@ class RegistroHidricoSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegistroHidrico
         fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'volumen_agua_m3', 'fuente_hidrica', 'fuente_hidrica_display', 'costo_bombeo', 'dias_inundacion', 'lamina_agua_cm', 'estado_drenaje', 'estado_drenaje_display')
+
+class CosechaSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    rendimiento_ton_ha = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Cosecha
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'produccion_obtenida_kg', 'humedad_grano_porcentaje', 'impurezas_porcentaje', 'condiciones_cosecha', 'rendimiento_ton_ha')
+
+    def get_rendimiento_ton_ha(self, obj):
+        try:
+            # Rendimiento = (Producción en kg / 1000) / Área del lote
+            area = obj.ciclo.lote.area_hectareas
+            if area > 0:
+                toneladas = obj.produccion_obtenida_kg / 1000
+                return round(float(toneladas) / float(area), 2)
+            return 0.0
+        except Exception:
+            return 0.0
+
+    def validate_produccion_obtenida_kg(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("La producción obtenida debe ser mayor a 0 kg.")
+        return value
+        
+    def validate_humedad_grano_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("La humedad debe estar entre 0 y 100.")
+        return value
+
+    def validate_impurezas_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de impurezas debe estar entre 0 y 100.")
+        return value
 
 class UserGestionSerializer(serializers.ModelSerializer):
     nombre_completo = serializers.SerializerMethodField(read_only=True)
