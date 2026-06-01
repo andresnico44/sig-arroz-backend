@@ -197,12 +197,7 @@ class CicloProductivoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         lote = serializer.validated_data['lote']
 
-        # Validación 1: Verificar el rol del usuario (Matriz de Permisos)
-        if user.perfil.rol == 'TECNICO':
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Permiso Denegado: Los asesores técnicos no tienen autorización para iniciar ciclos productivos.")
-
-        # Validación 2: Verificar la propiedad del lote
+        # Validación 1: Verificar la propiedad del lote
         if user.perfil.rol == 'PRODUCTOR' and lote.finca.productor != user:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Acción Denegada: El lote seleccionado no pertenece a tus fincas.")

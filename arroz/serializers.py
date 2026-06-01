@@ -164,7 +164,7 @@ class PreparacionMaquinariaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PreparacionMaquinaria
-        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'labor', 'horas_maquina', 'combustible_galones', 'costo_hora', 'costo_total', 'observaciones')
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'labor', 'condicion_humedad', 'horas_maquina', 'combustible_galones', 'costo_hora', 'costo_total', 'observaciones')
         read_only_fields = ('costo_total',)
 
     def validate_horas_maquina(self, value):
@@ -196,7 +196,7 @@ class SeguimientoFenologicoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = SeguimientoFenologico
-        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'fase', 'dias_transcurridos_calculados', 'observaciones', 'fotografia')
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'fase', 'estado_general', 'dias_transcurridos_calculados', 'observaciones', 'fotografia')
         read_only_fields = ('dias_transcurridos_calculados',)
 
 
@@ -274,6 +274,9 @@ class CosechaSerializer(serializers.ModelSerializer):
     lote_nombre = serializers.ReadOnlyField(source='ciclo.lote.nombre')
     finca_id = serializers.ReadOnlyField(source='ciclo.lote.finca.id')
     finca_nombre = serializers.ReadOnlyField(source='ciclo.lote.finca.nombre')
+    variedad_arroz = serializers.ReadOnlyField(source='ciclo.variedad_arroz')
+    lote_area = serializers.ReadOnlyField(source='ciclo.lote.area_hectareas')
+    estado_ciclo = serializers.ReadOnlyField(source='ciclo.estado')
     rendimiento_ton_ha = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -282,7 +285,8 @@ class CosechaSerializer(serializers.ModelSerializer):
             'id', 'ciclo', 'ciclo_nombre', 'lote_id', 'lote_nombre',
             'finca_id', 'finca_nombre', 'fecha', 'produccion_obtenida_kg',
             'humedad_grano_porcentaje', 'impurezas_porcentaje',
-            'condiciones_cosecha', 'rendimiento_ton_ha'
+            'condiciones_cosecha', 'rendimiento_ton_ha',
+            'variedad_arroz', 'lote_area', 'estado_ciclo'
         )
 
     def get_rendimiento_ton_ha(self, obj):

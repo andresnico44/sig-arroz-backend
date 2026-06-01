@@ -32,18 +32,13 @@ class IsProductorDueñoOrReadOnly(permissions.BasePermission):
 class IsProductorOrAdminOnlyForCiclos(permissions.BasePermission):
     """
     Matriz de Permisos (Módulo 2 - Ciclos Productivos):
-    - ADMIN y PRODUCTOR (dueño) pueden hacer CRUD completo.
-    - TECNICO sólo puede leer (SAFE_METHODS) para registrar actividades más adelante.
+    - ADMIN, PRODUCTOR (dueño) y TECNICO pueden hacer CRUD completo.
     """
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
-        if request.user.perfil.rol == 'ADMIN':
-            return True
-            
-        # Si la petición es de solo lectura, los técnicos pueden consultar sin restricción
-        if request.method in permissions.SAFE_METHODS:
+        if request.user.perfil.rol in ['ADMIN', 'TECNICO']:
             return True
             
         # Para escribir (Crear, Editar, Borrar), debe ser Productor y dueño de la finca
