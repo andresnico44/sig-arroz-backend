@@ -2,7 +2,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .models import (Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo, PreparacionMaquinaria, Siembra, 
                      SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
-                     AplicacionAgroquimico, RegistroHidrico, Cosecha)
+                     AplicacionAgroquimico, RegistroHidrico, Cosecha, Liquidacion)
 from rest_framework import serializers
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -386,6 +386,57 @@ class UserGestionSerializer(serializers.ModelSerializer):
             representation['rol'] = 'SIN_ROL'
             representation['telefono'] = ''
         return representation
+
+class LiquidacionSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    lote_id = serializers.ReadOnlyField(source='ciclo.lote.id')
+    lote_nombre = serializers.ReadOnlyField(source='ciclo.lote.nombre')
+    finca_id = serializers.ReadOnlyField(source='ciclo.lote.finca.id')
+    finca_nombre = serializers.ReadOnlyField(source='ciclo.lote.finca.nombre')
+
+    class Meta:
+        model = Liquidacion
+        fields = (
+            'id', 'ciclo', 'ciclo_nombre', 'lote_id', 'lote_nombre',
+            'finca_id', 'finca_nombre', 'fecha', 'humedad_final_porcentaje',
+            'porcentaje_grano_entero', 'porcentaje_grano_quebrado',
+            'precio_tonelada_cop', 'descuentos_aplicados_cop',
+            'ingreso_neto_cop', 'observaciones'
+        )
+
+    def validate_humedad_final_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("La humedad debe estar entre 0% y 100%.")
+        return value
+
+    def validate_porcentaje_grano_entero(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de grano entero debe estar entre 0% y 100%.")
+        return value
+
+    def validate_porcentaje_grano_quebrado(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de grano quebrado debe estar entre 0% y 100%.")
+        return value
+
+    def validate_precio_tonelada_cop(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El precio por tonelada no puede ser negativo.")
+        return value
+
+    def validate_ingreso_neto_cop(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El ingreso neto no puede ser negativo.")
+        return value
+
+    def validate(self, data):
+        entero = data.get('porcentaje_grano_entero')
+        quebrado = data.get('porcentaje_grano_quebrado')
+        if entero is not None and quebrado is not None:
+            if entero + quebrado > 100:
+                raise serializers.ValidationError("La suma de grano entero y quebrado no puede superar el 100%.")
+        return data
+
 
 
 

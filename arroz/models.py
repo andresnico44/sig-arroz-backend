@@ -471,4 +471,35 @@ class Cosecha(models.Model):
             self.ciclo.lote.save()
             
         super().save(*args, **kwargs)
+
+# 15. Entidad Liquidación del Molino (HU-014)
+class Liquidacion(models.Model):
+    ciclo = models.OneToOneField(CicloProductivo, on_delete=models.CASCADE, related_name='liquidacion')
+    fecha = models.DateField()
+    humedad_final_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, help_text="Porcentaje de humedad final logrado en secamiento")
+    porcentaje_grano_entero = models.DecimalField(max_digits=5, decimal_places=2, help_text="Porcentaje de granos enteros logrados en trilla")
+    porcentaje_grano_quebrado = models.DecimalField(max_digits=5, decimal_places=2, help_text="Porcentaje de granos quebrados logrados en trilla")
+    precio_tonelada_cop = models.DecimalField(max_digits=12, decimal_places=2, help_text="Precio pagado por tonelada en pesos COP")
+    descuentos_aplicados_cop = models.DecimalField(max_digits=12, decimal_places=2, default=0.0, help_text="Descuentos aplicados por humedad o impurezas en pesos COP")
+    ingreso_neto_cop = models.DecimalField(max_digits=12, decimal_places=2, help_text="Monto neto final recibido del molino en pesos COP")
+    observaciones = models.TextField(null=True, blank=True, help_text="Observaciones generales sobre la trilla o liquidación")
+
+    class Meta:
+        db_table = 'liquidacion'
+
+    def __str__(self):
+        return f"Liquidación {self.fecha} - {self.ciclo.nombre_ciclo} (${self.ingreso_neto_cop})"
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            # Lógica de cierre al registrar la liquidación
+            self.ciclo.estado = 'FINALIZADO'
+            self.ciclo.save()
+            
+            # Cambiar el lote a "En Descanso" para el reposo biológico de la tierra (Sprint 4)
+            self.ciclo.lote.estado = 'DESCANSO'
+            self.ciclo.lote.save()
+            
+        super().save(*args, **kwargs)
+
 

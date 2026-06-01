@@ -2,17 +2,19 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from .serializers import (CustomTokenObtainPairSerializer, RegistroUsuarioSerializer, 
                           FincaSerializer, LoteSerializer, AnalisisSueloSerializer, CicloProductivoSerializer,
                           PreparacionMaquinariaSerializer, SiembraSerializer, SeguimientoFenologicoSerializer,
                           RegistroCostoSerializer, MonitoreoFitosanitarioSerializer, FertilizacionSerializer,
-                          AplicacionAgroquimicoSerializer, RegistroHidricoSerializer, UserGestionSerializer, CosechaSerializer)
+                          AplicacionAgroquimicoSerializer, RegistroHidricoSerializer, UserGestionSerializer, CosechaSerializer, LiquidacionSerializer)
 from .models import (Finca, Lote, AnalisisSuelo, CicloProductivo, Perfil, PreparacionMaquinaria, Siembra, 
                      SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
-                     AplicacionAgroquimico, RegistroHidrico, Cosecha)
+                     AplicacionAgroquimico, RegistroHidrico, Cosecha, Liquidacion)
 from .permissions import IsProductorDueñoOrReadOnly, IsProductorOrAdminOnlyForCiclos, IsProductorOrTecnicoOrAdminForAnalisis, IsProductorOrTecnicoOrAdminForLabores, IsAdminUserOnly
+
 
 # Vista para el Login
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -206,6 +208,99 @@ class CicloProductivoViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Acción Denegada: El lote seleccionado no pertenece a tus fincas.")
 
         serializer.save()
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def trazabilidad(self, request, pk=None):
+        ciclo = self.get_object()
+        
+        # Serializar toda la información asociada
+        ciclo_data = CicloProductivoSerializer(ciclo).data
+        lote_data = LoteSerializer(ciclo.lote).data
+        finca_data = FincaSerializer(ciclo.lote.finca).data
+        
+        # Análisis de suelo (del lote)
+        analisis_suelo = AnalisisSuelo.objects.filter(lote=ciclo.lote).order_by('-fecha_muestreo', '-id')
+        analisis_data = AnalisisSueloSerializer(analisis_suelo, many=True).data
+        
+        # Labores de preparación
+        preparaciones = ciclo.preparaciones.all().order_by('fecha', 'id')
+        preparaciones_data = PreparacionMaquinariaSerializer(preparaciones, many=True).data
+        
+        # Siembra
+        siembra_data = None
+        if hasattr(ciclo, 'siembra') and ciclo.siembra:
+            siembra_data = SiembraSerializer(ciclo.siembra).data
+            
+        # Seguimiento fenológico
+        fenologia = ciclo.seguimientos_fenologicos.all().order_by('fecha', 'id')
+        fenologia_data = SeguimientoFenologicoSerializer(fenologia, many=True).data
+        
+        # Monitoreos fitosanitarios
+        monitoreos = ciclo.monitoreos.all().order_by('fecha', 'id')
+        monitoreos_data = MonitoreoFitosanitarioSerializer(monitoreos, many=True).data
+        
+        # Aplicaciones de agroquímicos
+        aplicaciones = ciclo.aplicaciones_agroquimicos.all().order_by('fecha', 'id')
+        aplicaciones_data = AplicacionAgroquimicoSerializer(aplicaciones, many=True).data
+        
+        # Fertilizaciones
+        fertilizaciones = ciclo.fertilizaciones.all().order_by('fecha', 'id')
+        fertilizaciones_data = FertilizacionSerializer(fertilizaciones, many=True).data
+        
+        # Riegos
+        riegos = ciclo.riegos.all().order_by('fecha', 'id')
+        riegos_data = RegistroHidricoSerializer(riegos, many=True).data
+        
+        # Costos
+        costos = ciclo.costos.all().order_by('fecha', 'id')
+        costos_data = RegistroCostoSerializer(costos, many=True).data
+        
+        # Cosecha
+        cosecha_data = None
+        if hasattr(ciclo, 'cosecha') and ciclo.cosecha:
+            cosecha_data = CosechaSerializer(ciclo.cosecha).data
+            
+        # Liquidación
+        liquidacion_data = None
+        if hasattr(ciclo, 'liquidacion') and ciclo.liquidacion:
+            liquidacion_data = LiquidacionSerializer(ciclo.liquidacion).data
+            
+        # Rentabilidad consolidada (HU-14)
+        total_egresos = sum(float(c.monto_total) for c in costos)
+        ingreso_neto = float(ciclo.liquidacion.ingreso_neto_cop) if (hasattr(ciclo, 'liquidacion') and ciclo.liquidacion) else 0.0
+        balance = ingreso_neto - total_egresos
+        area = float(ciclo.lote.area_hectareas)
+        balance_por_ha = balance / area if area > 0 else 0.0
+        costo_por_ha = total_egresos / area if area > 0 else 0.0
+        ingreso_por_ha = ingreso_neto / area if area > 0 else 0.0
+        
+        resumen_financiero = {
+            'total_egresos': total_egresos,
+            'ingreso_neto': ingreso_neto,
+            'balance_neto': balance,
+            'costo_por_hectarea': round(costo_por_ha, 2),
+            'ingreso_por_hectarea': round(ingreso_por_ha, 2),
+            'balance_por_hectarea': round(balance_por_ha, 2),
+            'rentable': balance > 0
+        }
+        
+        return Response({
+            'ciclo': ciclo_data,
+            'lote': lote_data,
+            'finca': finca_data,
+            'analisis_suelo': analisis_data,
+            'preparaciones': preparaciones_data,
+            'siembra': siembra_data,
+            'fenologia': fenologia_data,
+            'monitoreos': monitoreos_data,
+            'aplicaciones': aplicaciones_data,
+            'fertilizaciones': fertilizaciones_data,
+            'riegos': riegos_data,
+            'costos': costos_data,
+            'cosecha': cosecha_data,
+            'liquidacion': liquidacion_data,
+            'resumen_financiero': resumen_financiero
+        }, status=status.HTTP_200_OK)
 
 # =========================================================================
 # SPRINT 2: OPERACIONES DE ESTABLECIMIENTO DEL CULTIVO
@@ -479,6 +574,40 @@ class CosechaViewSet(viewsets.ModelViewSet):
         if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar cosecha no te pertenece.")
+
+        serializer.save()
+
+class LiquidacionViewSet(viewsets.ModelViewSet):
+    serializer_class = LiquidacionSerializer
+    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
+
+    def get_queryset(self):
+        user = self.request.user
+        ciclo_id = self.request.query_params.get('ciclo_id', None)
+        finca_id = self.request.query_params.get('finca_id', None)
+        lote_id = self.request.query_params.get('lote_id', None)
+
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            queryset = Liquidacion.objects.all().order_by('-fecha', '-id')
+        else:
+            queryset = Liquidacion.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
+
+        if ciclo_id:
+            queryset = queryset.filter(ciclo_id=ciclo_id)
+        if finca_id:
+            queryset = queryset.filter(ciclo__lote__finca_id=finca_id)
+        if lote_id:
+            queryset = queryset.filter(ciclo__lote_id=lote_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        ciclo = serializer.validated_data['ciclo']
+        user = self.request.user
+
+        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar la liquidación no te pertenece.")
 
         serializer.save()
 
