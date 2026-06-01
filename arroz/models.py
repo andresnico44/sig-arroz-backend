@@ -149,9 +149,15 @@ class PreparacionMaquinaria(models.Model):
         ('ZANJEO', 'Zanjeo/Drenajes'),
         ('OTRO', 'Otro'),
     ]
+    CONDICIONES_HUMEDAD = [
+        ('SECO', 'Suelo Seco'),
+        ('CAPACIDAD_CAMPO', 'Capacidad de Campo (Ideal)'),
+        ('SATURADO', 'Saturado / Lodo'),
+    ]
     ciclo = models.ForeignKey(CicloProductivo, on_delete=models.CASCADE, related_name='preparaciones')
     fecha = models.DateField()
     labor = models.CharField(max_length=20, choices=LABORES)
+    condicion_humedad = models.CharField(max_length=20, choices=CONDICIONES_HUMEDAD, default='CAPACIDAD_CAMPO')
     horas_maquina = models.DecimalField(max_digits=5, decimal_places=2, help_text="Horas de uso del tractor")
     combustible_galones = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     costo_hora = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
@@ -238,9 +244,16 @@ class SeguimientoFenologico(models.Model):
         ('GRANO_PASTOSO', 'Grano Pastoso'),
         ('MADUREZ_COSECHA', 'Madurez de Cosecha'),
     ]
+    ESTADOS = [
+        ('EXCELENTE', 'Excelente Vigor'),
+        ('BUENO', 'Buen Desarrollo'),
+        ('REGULAR', 'Desarrollo Regular / Atraso'),
+        ('MALO', 'Deficiente / Estrés Severo'),
+    ]
     ciclo = models.ForeignKey(CicloProductivo, on_delete=models.CASCADE, related_name='seguimientos_fenologicos')
     fecha = models.DateField()
     fase = models.CharField(max_length=30, choices=FASES)
+    estado_general = models.CharField(max_length=20, choices=ESTADOS, default='BUENO', help_text="Vigor y estado general del cultivo")
     dias_transcurridos_calculados = models.IntegerField(null=True, blank=True, help_text="Días transcurridos desde la siembra (auto calculado)")
     observaciones = models.TextField(null=True, blank=True)
     fotografia = models.ImageField(upload_to='fenologia/', null=True, blank=True)
