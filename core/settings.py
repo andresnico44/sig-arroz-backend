@@ -19,9 +19,7 @@ SECRET_KEY = 'django-insecure-8x%b!#r@omg&@ysaa!s6%_k^!h$fcn%+*78jdhetg0ui-%38wz
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True' and not os.getenv('RAILWAY_ENVIRONMENT')
 
-ALLOWED_HOSTS = ['*']
-
-
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.railway.app').split(',')
 
 # Application definition
 
@@ -60,11 +58,25 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
-CSRF_TRUSTED_ORIGINS = [
+CORS_ALLOW_ALL_ORIGINS = False
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
     'https://sig-arroz-frontend.vercel.app',
-    'https://sig-arroz-frontend-20.vercel.app'
+    'https://sig-arroz-frontend-20.vercel.app',
 ]
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'https://sig-arroz-frontend.vercel.app',
+    'https://sig-arroz-frontend-20.vercel.app',
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'core.urls'
 
