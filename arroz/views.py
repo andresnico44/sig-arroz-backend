@@ -260,23 +260,25 @@ class CicloProductivoViewSet(viewsets.ModelViewSet):
         if hasattr(ciclo, 'liquidacion') and ciclo.liquidacion:
             liquidacion_data = LiquidacionSerializer(ciclo.liquidacion).data
             
-        # Rentabilidad consolidada (HU-14)
-        total_egresos = sum(float(c.monto_total) for c in costos)
-        ingreso_neto = float(ciclo.liquidacion.ingreso_neto_cop) if (hasattr(ciclo, 'liquidacion') and ciclo.liquidacion) else 0.0
+        # Rentabilidad consolidada con aritmética Decimal de alta precisión (INSSA-25)
+        from decimal import Decimal
+        total_egresos = sum((c.monto_total for c in costos), Decimal('0.00'))
+        ingreso_neto = ciclo.liquidacion.ingreso_neto_cop if (hasattr(ciclo, 'liquidacion') and ciclo.liquidacion) else Decimal('0.00')
         balance = ingreso_neto - total_egresos
-        area = float(ciclo.lote.area_hectareas)
-        balance_por_ha = balance / area if area > 0 else 0.0
-        costo_por_ha = total_egresos / area if area > 0 else 0.0
-        ingreso_por_ha = ingreso_neto / area if area > 0 else 0.0
+        area = ciclo.lote.area_hectareas
+        
+        balance_por_ha = (balance / area) if (area and area > Decimal('0.00')) else Decimal('0.00')
+        costo_por_ha = (total_egresos / area) if (area and area > Decimal('0.00')) else Decimal('0.00')
+        ingreso_por_ha = (ingreso_neto / area) if (area and area > Decimal('0.00')) else Decimal('0.00')
         
         resumen_financiero = {
-            'total_egresos': total_egresos,
-            'ingreso_neto': ingreso_neto,
-            'balance_neto': balance,
-            'costo_por_hectarea': round(costo_por_ha, 2),
-            'ingreso_por_hectarea': round(ingreso_por_ha, 2),
-            'balance_por_hectarea': round(balance_por_ha, 2),
-            'rentable': balance > 0
+            'total_egresos': float(round(total_egresos, 2)),
+            'ingreso_neto': float(round(ingreso_neto, 2)),
+            'balance_neto': float(round(balance, 2)),
+            'costo_por_hectarea': float(round(costo_por_ha, 2)),
+            'ingreso_por_hectarea': float(round(ingreso_por_ha, 2)),
+            'balance_por_hectarea': float(round(balance_por_ha, 2)),
+            'rentable': balance > Decimal('0.00')
         }
         
         return Response({

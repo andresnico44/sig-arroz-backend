@@ -293,9 +293,11 @@ class CosechaSerializer(serializers.ModelSerializer):
         try:
             # Rendimiento = (Producción en kg / 1000) / Área del lote
             area = obj.ciclo.lote.area_hectareas
-            if area > 0:
-                toneladas = obj.produccion_obtenida_kg / 1000
-                return round(float(toneladas) / float(area), 2)
+            if area and area > 0:
+                from decimal import Decimal
+                toneladas = obj.produccion_obtenida_kg / Decimal('1000')
+                rendimiento = toneladas / area
+                return float(round(rendimiento, 2))
             return 0.0
         except Exception:
             return 0.0
