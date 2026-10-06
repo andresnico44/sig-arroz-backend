@@ -1,6 +1,10 @@
 venv/
+.venv/
 .env
+staticfiles/
 db.sqlite3
+*.sqlite3
+package-lock.json
 __pycache__/
 *.pyc
 *.webp
