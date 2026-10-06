@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 
@@ -121,6 +121,7 @@ class CicloProductivo(models.Model):
     def __str__(self):
         return f"{self.nombre_ciclo} ({self.anio}-{self.semestre})"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         # Lógica de Validación y Cambio de Estado del Lote (CU-08 / HU-05)
         if not self.pk: # Si es un nuevo ciclo
@@ -170,6 +171,7 @@ class PreparacionMaquinaria(models.Model):
     def __str__(self):
         return f"{self.get_labor_display()} - {self.ciclo.nombre_ciclo} ({self.fecha})"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         self.costo_total = self.horas_maquina * self.costo_hora
         super().save(*args, **kwargs)
@@ -188,6 +190,7 @@ class PreparacionMaquinaria(models.Model):
             costo_obj.fecha = self.fecha
             costo_obj.save()
 
+    @transaction.atomic
     def delete(self, *args, **kwargs):
         from .models import RegistroCosto
         desc = f"Labores mecánicas de {self.get_labor_display()} (Fecha: {self.fecha})"
@@ -216,6 +219,7 @@ class Siembra(models.Model):
     def __str__(self):
         return f"Siembra {self.variedad} - {self.ciclo.nombre_ciclo}"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         # Lógica de Cambio Automático de Estados (HU-07)
         # Al sembrar, el ciclo entra en EJECUCION y el lote EN_CICLO
@@ -340,6 +344,7 @@ class Fertilizacion(models.Model):
     def __str__(self):
         return f"Fertilización {self.tipo_fertilizante} - {self.fuente_comercial} ({self.fecha})"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         from .models import RegistroCosto
@@ -356,6 +361,7 @@ class Fertilizacion(models.Model):
             costo_obj.fecha = self.fecha
             costo_obj.save()
 
+    @transaction.atomic
     def delete(self, *args, **kwargs):
         from .models import RegistroCosto
         desc = f"Fertilización {self.tipo_fertilizante} - {self.fuente_comercial} ({self.dosis_kg_ha} kg/ha)"
@@ -384,6 +390,7 @@ class AplicacionAgroquimico(models.Model):
     def __str__(self):
         return f"Aplicación {self.nombre_comercial} ({self.fecha})"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         from .models import RegistroCosto
@@ -400,6 +407,7 @@ class AplicacionAgroquimico(models.Model):
             costo_obj.fecha = self.fecha
             costo_obj.save()
 
+    @transaction.atomic
     def delete(self, *args, **kwargs):
         from .models import RegistroCosto
         desc = f"Aplicación Agroquímico {self.nombre_comercial} ({self.ingrediente_activo})"
@@ -433,6 +441,7 @@ class RegistroHidrico(models.Model):
     def __str__(self):
         return f"Riego {self.fuente_hidrica} - L: {self.lamina_agua_cm}cm ({self.fecha})"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         from .models import RegistroCosto
@@ -448,6 +457,7 @@ class RegistroHidrico(models.Model):
             costo_obj.fecha = self.fecha
             costo_obj.save()
 
+    @transaction.atomic
     def delete(self, *args, **kwargs):
         from .models import RegistroCosto
         desc = f"Manejo Hídrico / Riego desde {self.get_fuente_hidrica_display()}"
@@ -473,6 +483,7 @@ class Cosecha(models.Model):
     def __str__(self):
         return f"Cosecha {self.fecha} - {self.ciclo.nombre_ciclo}"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         if not self.pk:
             # Lógica de cierre al registrar la cosecha
@@ -503,6 +514,7 @@ class Liquidacion(models.Model):
     def __str__(self):
         return f"Liquidación {self.fecha} - {self.ciclo.nombre_ciclo} (${self.ingreso_neto_cop})"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         if not self.pk:
             # Lógica de cierre al registrar la liquidación
