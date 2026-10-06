@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv()
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'SigArroz2026SecureProductionSecretKeyRootToken_9988776655')
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True' and not os.getenv('RAILWAY_ENVIRONMENT')
@@ -209,4 +209,10 @@ LOGGING = {
             'propagate': False,
         },
     },
-}
+}
+
+# Configuraciones de Hardening de Seguridad HTTP (OWASP)
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
