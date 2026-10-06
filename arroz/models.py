@@ -121,20 +121,22 @@ class CicloProductivo(models.Model):
     def __str__(self):
         return f"{self.nombre_ciclo} ({self.anio}-{self.semestre})"
 
-    @transaction.atomic
-    def save(self, *args, **kwargs):
-        # Lógica de Validación y Cambio de Estado del Lote (CU-08 / HU-05)
+    def clean(self):
+        super().clean()
         if not self.pk: # Si es un nuevo ciclo
             # Validar si el lote ya tiene un ciclo activo
             if self.lote.estado in ['PREPARACION', 'EN_CICLO']:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError({"detail": "El lote seleccionado ya posee un ciclo en ejecución. Debe cerrar el ciclo actual antes de iniciar uno nuevo."})
-            
-            # Cambiar automáticamente el estado del lote a "En Preparación" al planificar el ciclo
-            self.lote.estado = 'PREPARACION'
-            self.lote.save()
-            
-        super().save(*args, **kwargs)
+                raise ValidationError("El lote seleccionado ya posee un ciclo en ejecución. Debe cerrar el ciclo actual antes de iniciar uno nuevo.")
+
+    def save(self, *args, **kwargs):
+        # Lógica de Validación y Cambio de Estado del Lote (CU-08 / HU-05)
+        with transaction.atomic():
+            if not self.pk: # Si es un nuevo ciclo
+                # Cambiar automáticamente el estado del lote a "En Preparación" al planificar el ciclo
+                self.lote.estado = 'PREPARACION'
+                self.lote.save()
+                
+            super().save(*args, **kwargs)
 
 # =========================================================================
 # SPRINT 2: OPERACIONES DE ESTABLECIMIENTO DEL CULTIVO
@@ -171,31 +173,29 @@ class PreparacionMaquinaria(models.Model):
     def __str__(self):
         return f"{self.get_labor_display()} - {self.ciclo.nombre_ciclo} ({self.fecha})"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
         self.costo_total = self.horas_maquina * self.costo_hora
-        super().save(*args, **kwargs)
-        
-        # Inyectar/Actualizar en RegistroCosto
-        from .models import RegistroCosto
-        desc = f"Labores mecánicas de {self.get_labor_display()} (Fecha: {self.fecha})"
-        costo_obj, created = RegistroCosto.objects.get_or_create(
-            ciclo=self.ciclo,
-            categoria='MAQUINARIA',
-            descripcion=desc,
-            defaults={'fecha': self.fecha, 'monto_total': self.costo_total}
-        )
-        if not created:
-            costo_obj.monto_total = self.costo_total
-            costo_obj.fecha = self.fecha
-            costo_obj.save()
-
-    @transaction.atomic
-    def delete(self, *args, **kwargs):
-        from .models import RegistroCosto
-        desc = f"Labores mecánicas de {self.get_labor_display()} (Fecha: {self.fecha})"
-        RegistroCosto.objects.filter(ciclo=self.ciclo, categoria='MAQUINARIA', descripcion=desc).delete()
-        super().delete(*args, **kwargs)
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            
+            # Inyectar/Actualizar en RegistroCosto
+            from .models import RegistroCosto
+            desc = f"Labores mecánicas de {self.get_labor_display()} (Fecha: {self.fecha})"
+            costo_obj, created = RegistroCosto.objects.get_or_create(
+                preparacion=self,
+                defaults={
+                    'ciclo': self.ciclo,
+                    'categoria': 'MAQUINARIA',
+                    'descripcion': desc,
+                    'fecha': self.fecha,
+                    'monto_total': self.costo_total
+                }
+            )
+            if not created:
+                costo_obj.descripcion = desc
+                costo_obj.monto_total = self.costo_total
+                costo_obj.fecha = self.fecha
+                costo_obj.save()
 
 
 # 7. Entidad Siembra (HU-07)
@@ -219,20 +219,20 @@ class Siembra(models.Model):
     def __str__(self):
         return f"Siembra {self.variedad} - {self.ciclo.nombre_ciclo}"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
         # Lógica de Cambio Automático de Estados (HU-07)
         # Al sembrar, el ciclo entra en EJECUCION y el lote EN_CICLO
-        if not self.pk: # Solo en la creación
-            self.ciclo.estado = 'EJECUCION'
-            if not self.ciclo.fecha_inicio_real:
-                self.ciclo.fecha_inicio_real = self.fecha
-            self.ciclo.save()
-            
-            self.ciclo.lote.estado = 'EN_CICLO'
-            self.ciclo.lote.save()
-            
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            if not self.pk: # Solo en la creación
+                self.ciclo.estado = 'EJECUCION'
+                if not self.ciclo.fecha_inicio_real:
+                    self.ciclo.fecha_inicio_real = self.fecha
+                self.ciclo.save()
+                
+                self.ciclo.lote.estado = 'EN_CICLO'
+                self.ciclo.lote.save()
+                
+            super().save(*args, **kwargs)
 
 
 # 8. Entidad Seguimiento Fenológico (HU-08)
@@ -292,6 +292,10 @@ class RegistroCosto(models.Model):
         ('OTROS', 'Otros'),
     ]
     ciclo = models.ForeignKey(CicloProductivo, on_delete=models.CASCADE, related_name='costos')
+    preparacion = models.OneToOneField('PreparacionMaquinaria', on_delete=models.CASCADE, null=True, blank=True, related_name='costo_asociado')
+    fertilizacion = models.OneToOneField('Fertilizacion', on_delete=models.CASCADE, null=True, blank=True, related_name='costo_asociado')
+    aplicacion = models.OneToOneField('AplicacionAgroquimico', on_delete=models.CASCADE, null=True, blank=True, related_name='costo_asociado')
+    riego = models.OneToOneField('RegistroHidrico', on_delete=models.CASCADE, null=True, blank=True, related_name='costo_asociado')
     fecha = models.DateField()
     categoria = models.CharField(max_length=30, choices=CATEGORIAS)
     descripcion = models.TextField()
@@ -344,29 +348,27 @@ class Fertilizacion(models.Model):
     def __str__(self):
         return f"Fertilización {self.tipo_fertilizante} - {self.fuente_comercial} ({self.fecha})"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        from .models import RegistroCosto
-        desc = f"Fertilización {self.tipo_fertilizante} - {self.fuente_comercial} ({self.dosis_kg_ha} kg/ha)"
-        monto = self.costo_producto + self.costo_mano_obra
-        costo_obj, created = RegistroCosto.objects.get_or_create(
-            ciclo=self.ciclo,
-            categoria='INSUMOS_AGROQUIMICOS',
-            descripcion=desc,
-            defaults={'fecha': self.fecha, 'monto_total': monto}
-        )
-        if not created:
-            costo_obj.monto_total = monto
-            costo_obj.fecha = self.fecha
-            costo_obj.save()
-
-    @transaction.atomic
-    def delete(self, *args, **kwargs):
-        from .models import RegistroCosto
-        desc = f"Fertilización {self.tipo_fertilizante} - {self.fuente_comercial} ({self.dosis_kg_ha} kg/ha)"
-        RegistroCosto.objects.filter(ciclo=self.ciclo, categoria='INSUMOS_AGROQUIMICOS', descripcion=desc).delete()
-        super().delete(*args, **kwargs)
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            from .models import RegistroCosto
+            desc = f"Fertilización {self.tipo_fertilizante} - {self.fuente_comercial} ({self.dosis_kg_ha} kg/ha)"
+            monto = self.costo_producto + self.costo_mano_obra
+            costo_obj, created = RegistroCosto.objects.get_or_create(
+                fertilizacion=self,
+                defaults={
+                    'ciclo': self.ciclo,
+                    'categoria': 'INSUMOS_AGROQUIMICOS',
+                    'descripcion': desc,
+                    'fecha': self.fecha,
+                    'monto_total': monto
+                }
+            )
+            if not created:
+                costo_obj.descripcion = desc
+                costo_obj.monto_total = monto
+                costo_obj.fecha = self.fecha
+                costo_obj.save()
 
 
 # 12. Entidad Aplicación de Agroquímicos (HU-17)
@@ -390,29 +392,27 @@ class AplicacionAgroquimico(models.Model):
     def __str__(self):
         return f"Aplicación {self.nombre_comercial} ({self.fecha})"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        from .models import RegistroCosto
-        desc = f"Aplicación Agroquímico {self.nombre_comercial} ({self.ingrediente_activo})"
-        monto = self.costo_producto + self.costo_mano_obra
-        costo_obj, created = RegistroCosto.objects.get_or_create(
-            ciclo=self.ciclo,
-            categoria='INSUMOS_AGROQUIMICOS',
-            descripcion=desc,
-            defaults={'fecha': self.fecha, 'monto_total': monto}
-        )
-        if not created:
-            costo_obj.monto_total = monto
-            costo_obj.fecha = self.fecha
-            costo_obj.save()
-
-    @transaction.atomic
-    def delete(self, *args, **kwargs):
-        from .models import RegistroCosto
-        desc = f"Aplicación Agroquímico {self.nombre_comercial} ({self.ingrediente_activo})"
-        RegistroCosto.objects.filter(ciclo=self.ciclo, categoria='INSUMOS_AGROQUIMICOS', descripcion=desc).delete()
-        super().delete(*args, **kwargs)
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            from .models import RegistroCosto
+            desc = f"Aplicación Agroquímico {self.nombre_comercial} ({self.ingrediente_activo})"
+            monto = self.costo_producto + self.costo_mano_obra
+            costo_obj, created = RegistroCosto.objects.get_or_create(
+                aplicacion=self,
+                defaults={
+                    'ciclo': self.ciclo,
+                    'categoria': 'INSUMOS_AGROQUIMICOS',
+                    'descripcion': desc,
+                    'fecha': self.fecha,
+                    'monto_total': monto
+                }
+            )
+            if not created:
+                costo_obj.descripcion = desc
+                costo_obj.monto_total = monto
+                costo_obj.fecha = self.fecha
+                costo_obj.save()
 
 
 # 13. Entidad Manejo Hídrico y Control de Riego (HU-18)
@@ -441,28 +441,26 @@ class RegistroHidrico(models.Model):
     def __str__(self):
         return f"Riego {self.fuente_hidrica} - L: {self.lamina_agua_cm}cm ({self.fecha})"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        from .models import RegistroCosto
-        desc = f"Manejo Hídrico / Riego desde {self.get_fuente_hidrica_display()}"
-        costo_obj, created = RegistroCosto.objects.get_or_create(
-            ciclo=self.ciclo,
-            categoria='OTROS',
-            descripcion=desc,
-            defaults={'fecha': self.fecha, 'monto_total': self.costo_bombeo}
-        )
-        if not created:
-            costo_obj.monto_total = self.costo_bombeo
-            costo_obj.fecha = self.fecha
-            costo_obj.save()
-
-    @transaction.atomic
-    def delete(self, *args, **kwargs):
-        from .models import RegistroCosto
-        desc = f"Manejo Hídrico / Riego desde {self.get_fuente_hidrica_display()}"
-        RegistroCosto.objects.filter(ciclo=self.ciclo, categoria='OTROS', descripcion=desc).delete()
-        super().delete(*args, **kwargs)
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            from .models import RegistroCosto
+            desc = f"Manejo Hídrico / Riego desde {self.get_fuente_hidrica_display()}"
+            costo_obj, created = RegistroCosto.objects.get_or_create(
+                riego=self,
+                defaults={
+                    'ciclo': self.ciclo,
+                    'categoria': 'OTROS',
+                    'descripcion': desc,
+                    'fecha': self.fecha,
+                    'monto_total': self.costo_bombeo
+                }
+            )
+            if not created:
+                costo_obj.descripcion = desc
+                costo_obj.monto_total = self.costo_bombeo
+                costo_obj.fecha = self.fecha
+                costo_obj.save()
 
 # =========================================================================
 # SPRINT 4: COSECHA Y CIERRE ECONÓMICO
@@ -483,18 +481,18 @@ class Cosecha(models.Model):
     def __str__(self):
         return f"Cosecha {self.fecha} - {self.ciclo.nombre_ciclo}"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
-        if not self.pk:
-            # Lógica de cierre al registrar la cosecha
-            self.ciclo.estado = 'COSECHADO'
-            self.ciclo.fecha_fin_real = self.fecha
-            self.ciclo.save()
-            
-            self.ciclo.lote.estado = 'COSECHADO'
-            self.ciclo.lote.save()
-            
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            if not self.pk:
+                # Lógica de cierre al registrar la cosecha
+                self.ciclo.estado = 'COSECHADO'
+                self.ciclo.fecha_fin_real = self.fecha
+                self.ciclo.save()
+                
+                self.ciclo.lote.estado = 'COSECHADO'
+                self.ciclo.lote.save()
+                
+            super().save(*args, **kwargs)
 
 # 15. Entidad Liquidación del Molino (HU-014)
 class Liquidacion(models.Model):
@@ -514,17 +512,17 @@ class Liquidacion(models.Model):
     def __str__(self):
         return f"Liquidación {self.fecha} - {self.ciclo.nombre_ciclo} (${self.ingreso_neto_cop})"
 
-    @transaction.atomic
     def save(self, *args, **kwargs):
-        if not self.pk:
-            # Lógica de cierre al registrar la liquidación
-            self.ciclo.estado = 'FINALIZADO'
-            self.ciclo.save()
-            
-            # Cambiar el lote a "En Descanso" para el reposo biológico de la tierra (Sprint 4)
-            self.ciclo.lote.estado = 'DESCANSO'
-            self.ciclo.lote.save()
-            
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            if not self.pk:
+                # Lógica de cierre al registrar la liquidación
+                self.ciclo.estado = 'FINALIZADO'
+                self.ciclo.save()
+                
+                # Cambiar el lote a "En Descanso" para el reposo biológico de la tierra (Sprint 4)
+                self.ciclo.lote.estado = 'DESCANSO'
+                self.ciclo.lote.save()
+                
+            super().save(*args, **kwargs)
 
 
