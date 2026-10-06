@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv()
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-p_&9q1!k$8m!z@x#w7v2e$r%t^y&u*i(o)p_sigarroz_2026_prod')
+SECRET_KEY = os.getenv('SECRET_KEY', 'SigArroz2026SecureProductionSecretKeyRootToken_9988776655')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True' and not os.getenv('RAILWAY_ENVIRONMENT')
