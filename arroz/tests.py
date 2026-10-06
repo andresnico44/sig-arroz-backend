@@ -122,20 +122,21 @@ class LiquidacionModelAndTrazabilidadTestCase(TestCase):
         # Rentable = True (5.0M > 0)
         
         # Simular lo que calcula la vista del backend en la acción trazabilidad
+        from decimal import Decimal
         costos = self.ciclo.costos.all()
-        total_egresos = sum(float(c.monto_total) for c in costos)
-        ingreso_neto = float(self.ciclo.liquidacion.ingreso_neto_cop)
+        total_egresos = sum((c.monto_total for c in costos), Decimal('0.00'))
+        ingreso_neto = Decimal(str(self.ciclo.liquidacion.ingreso_neto_cop))
         balance = ingreso_neto - total_egresos
-        area = float(self.ciclo.lote.area_hectareas)
+        area = Decimal(str(self.ciclo.lote.area_hectareas))
         
         balance_por_ha = balance / area
         costo_por_ha = total_egresos / area
         ingreso_por_ha = ingreso_neto / area
         
-        self.assertEqual(total_egresos, 7500000.0)
-        self.assertEqual(ingreso_neto, 12500000.0)
-        self.assertEqual(balance, 5000000.0)
-        self.assertEqual(costo_por_ha, 1500000.0)
-        self.assertEqual(ingreso_por_ha, 2500000.0)
-        self.assertEqual(balance_por_ha, 1000000.0)
-        self.assertTrue(balance > 0)
+        self.assertEqual(total_egresos, Decimal('7500000.00'))
+        self.assertEqual(ingreso_neto, Decimal('12500000.00'))
+        self.assertEqual(balance, Decimal('5000000.00'))
+        self.assertEqual(costo_por_ha, Decimal('1500000.00'))
+        self.assertEqual(ingreso_por_ha, Decimal('2500000.00'))
+        self.assertEqual(balance_por_ha, Decimal('1000000.00'))
+        self.assertTrue(balance > Decimal('0.00'))
