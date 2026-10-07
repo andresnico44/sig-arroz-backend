@@ -303,310 +303,72 @@ class CicloProductivoViewSet(viewsets.ModelViewSet):
 # SPRINT 2: OPERACIONES DE ESTABLECIMIENTO DEL CULTIVO
 # =========================================================================
 
-class PreparacionMaquinariaViewSet(viewsets.ModelViewSet):
+from rest_framework.exceptions import PermissionDenied
+
+class BaseCicloRelacionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
+
+    def get_queryset(self):
+        user = self.request.user
+        ciclo_id = self.request.query_params.get('ciclo_id', None)
+        finca_id = self.request.query_params.get('finca_id', None)
+        lote_id = self.request.query_params.get('lote_id', None)
+        
+        # Obtener el modelo dinámicamente desde el serializer
+        model = self.get_serializer_class().Meta.model
+
+        if user.perfil.rol in ['ADMIN', 'TECNICO']:
+            queryset = model.objects.all().order_by('-fecha', '-id')
+        else:
+            queryset = model.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
+
+        if ciclo_id:
+            queryset = queryset.filter(ciclo_id=ciclo_id)
+        if finca_id:
+            queryset = queryset.filter(ciclo__lote__finca_id=finca_id)
+        if lote_id:
+            queryset = queryset.filter(ciclo__lote_id=lote_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        ciclo = serializer.validated_data['ciclo']
+        user = self.request.user
+
+        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
+            raise PermissionDenied("Acción Denegada: El ciclo al que intentas agregar un registro no te pertenece.")
+
+        serializer.save()
+
+class PreparacionMaquinariaViewSet(BaseCicloRelacionViewSet):
     serializer_class = PreparacionMaquinariaSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = PreparacionMaquinaria.objects.all().order_by('-fecha', '-id')
-        else:
-            # Privacidad: El productor solo ve labores de sus propios ciclos
-            queryset = PreparacionMaquinaria.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        # Seguridad: El productor solo puede añadir labores a sus propios ciclos
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas agregar labores no te pertenece.")
-
-        serializer.save()
-
-
-class SiembraViewSet(viewsets.ModelViewSet):
+class SiembraViewSet(BaseCicloRelacionViewSet):
     serializer_class = SiembraSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = Siembra.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = Siembra.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas agregar siembra no te pertenece.")
-
-        serializer.save()
-
-
-class SeguimientoFenologicoViewSet(viewsets.ModelViewSet):
+class SeguimientoFenologicoViewSet(BaseCicloRelacionViewSet):
     serializer_class = SeguimientoFenologicoSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = SeguimientoFenologico.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = SeguimientoFenologico.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas agregar fenología no te pertenece.")
-
-        serializer.save()
-
-
-# =========================================================================
-# SPRINT 3: GESTIÓN DE SANIDAD, NUTRICIÓN, MANEJO HÍDRICO Y BILLETERA
-# =========================================================================
-
-class RegistroCostoViewSet(viewsets.ModelViewSet):
+class RegistroCostoViewSet(BaseCicloRelacionViewSet):
     serializer_class = RegistroCostoSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = RegistroCosto.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = RegistroCosto.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar un costo no te pertenece.")
-
-        serializer.save()
-
-
-class MonitoreoFitosanitarioViewSet(viewsets.ModelViewSet):
+class MonitoreoFitosanitarioViewSet(BaseCicloRelacionViewSet):
     serializer_class = MonitoreoFitosanitarioSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = MonitoreoFitosanitario.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = MonitoreoFitosanitario.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas agregar monitoreo fitosanitario no te pertenece.")
-
-        serializer.save()
-
-
-class FertilizacionViewSet(viewsets.ModelViewSet):
+class FertilizacionViewSet(BaseCicloRelacionViewSet):
     serializer_class = FertilizacionSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = Fertilizacion.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = Fertilizacion.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar fertilización no te pertenece.")
-
-        serializer.save()
-
-
-class AplicacionAgroquimicoViewSet(viewsets.ModelViewSet):
+class AplicacionAgroquimicoViewSet(BaseCicloRelacionViewSet):
     serializer_class = AplicacionAgroquimicoSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = AplicacionAgroquimico.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = AplicacionAgroquimico.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar aplicación de agroquímicos no te pertenece.")
-
-        serializer.save()
-
-
-class RegistroHidricoViewSet(viewsets.ModelViewSet):
+class RegistroHidricoViewSet(BaseCicloRelacionViewSet):
     serializer_class = RegistroHidricoSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = RegistroHidrico.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = RegistroHidrico.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar riego no te pertenece.")
-
-        serializer.save()
-
-class CosechaViewSet(viewsets.ModelViewSet):
+class CosechaViewSet(BaseCicloRelacionViewSet):
     serializer_class = CosechaSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
 
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-        finca_id = self.request.query_params.get('finca_id', None)
-        lote_id = self.request.query_params.get('lote_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = Cosecha.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = Cosecha.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-        if finca_id:
-            queryset = queryset.filter(ciclo__lote__finca_id=finca_id)
-        if lote_id:
-            queryset = queryset.filter(ciclo__lote_id=lote_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar cosecha no te pertenece.")
-
-        serializer.save()
-
-class LiquidacionViewSet(viewsets.ModelViewSet):
+class LiquidacionViewSet(BaseCicloRelacionViewSet):
     serializer_class = LiquidacionSerializer
-    permission_classes = [IsAuthenticated, IsProductorOrTecnicoOrAdminForLabores]
-
-    def get_queryset(self):
-        user = self.request.user
-        ciclo_id = self.request.query_params.get('ciclo_id', None)
-        finca_id = self.request.query_params.get('finca_id', None)
-        lote_id = self.request.query_params.get('lote_id', None)
-
-        if user.perfil.rol in ['ADMIN', 'TECNICO']:
-            queryset = Liquidacion.objects.all().order_by('-fecha', '-id')
-        else:
-            queryset = Liquidacion.objects.filter(ciclo__lote__finca__productor=user).order_by('-fecha', '-id')
-
-        if ciclo_id:
-            queryset = queryset.filter(ciclo_id=ciclo_id)
-        if finca_id:
-            queryset = queryset.filter(ciclo__lote__finca_id=finca_id)
-        if lote_id:
-            queryset = queryset.filter(ciclo__lote_id=lote_id)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        ciclo = serializer.validated_data['ciclo']
-        user = self.request.user
-
-        if user.perfil.rol == 'PRODUCTOR' and ciclo.lote.finca.productor != user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Acción Denegada: El ciclo al que intentas registrar la liquidación no te pertenece.")
-
-        serializer.save()
 
 class UserGestionViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('id')
