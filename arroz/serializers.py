@@ -2,7 +2,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .models import (Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo, PreparacionMaquinaria, Siembra, 
                      SeguimientoFenologico, RegistroCosto, MonitoreoFitosanitario, Fertilizacion, 
-                     AplicacionAgroquimico, RegistroHidrico)
+                     AplicacionAgroquimico, RegistroHidrico, Cosecha, Liquidacion)
 from rest_framework import serializers
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -164,7 +164,7 @@ class PreparacionMaquinariaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PreparacionMaquinaria
-        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'labor', 'horas_maquina', 'combustible_galones', 'costo_hora', 'costo_total', 'observaciones')
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'labor', 'condicion_humedad', 'horas_maquina', 'combustible_galones', 'costo_hora', 'costo_total', 'observaciones')
         read_only_fields = ('costo_total',)
 
     def validate_horas_maquina(self, value):
@@ -196,7 +196,7 @@ class SeguimientoFenologicoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = SeguimientoFenologico
-        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'fase', 'dias_transcurridos_calculados', 'observaciones', 'fotografia')
+        fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'fase', 'estado_general', 'dias_transcurridos_calculados', 'observaciones', 'fotografia')
         read_only_fields = ('dias_transcurridos_calculados',)
 
 
@@ -267,6 +267,183 @@ class RegistroHidricoSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegistroHidrico
         fields = ('id', 'ciclo', 'ciclo_nombre', 'fecha', 'volumen_agua_m3', 'fuente_hidrica', 'fuente_hidrica_display', 'costo_bombeo', 'dias_inundacion', 'lamina_agua_cm', 'estado_drenaje', 'estado_drenaje_display')
+
+class CosechaSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    lote_id = serializers.ReadOnlyField(source='ciclo.lote.id')
+    lote_nombre = serializers.ReadOnlyField(source='ciclo.lote.nombre')
+    finca_id = serializers.ReadOnlyField(source='ciclo.lote.finca.id')
+    finca_nombre = serializers.ReadOnlyField(source='ciclo.lote.finca.nombre')
+    variedad_arroz = serializers.ReadOnlyField(source='ciclo.variedad_arroz')
+    lote_area = serializers.ReadOnlyField(source='ciclo.lote.area_hectareas')
+    estado_ciclo = serializers.ReadOnlyField(source='ciclo.estado')
+    rendimiento_ton_ha = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Cosecha
+        fields = (
+            'id', 'ciclo', 'ciclo_nombre', 'lote_id', 'lote_nombre',
+            'finca_id', 'finca_nombre', 'fecha', 'produccion_obtenida_kg',
+            'humedad_grano_porcentaje', 'impurezas_porcentaje',
+            'condiciones_cosecha', 'rendimiento_ton_ha',
+            'variedad_arroz', 'lote_area', 'estado_ciclo'
+        )
+
+    def get_rendimiento_ton_ha(self, obj):
+        try:
+            # Rendimiento = (Producción en kg / 1000) / Área del lote
+            area = obj.ciclo.lote.area_hectareas
+            if area and area > 0:
+                from decimal import Decimal
+                toneladas = obj.produccion_obtenida_kg / Decimal('1000')
+                rendimiento = toneladas / area
+                return float(round(rendimiento, 2))
+            return 0.0
+        except Exception:
+            return 0.0
+
+    def validate_produccion_obtenida_kg(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("La producción obtenida debe ser mayor a 0 kg.")
+        return value
+        
+    def validate_humedad_grano_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("La humedad debe estar entre 0 y 100.")
+        return value
+
+    def validate_impurezas_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de impurezas debe estar entre 0 y 100.")
+        return value
+
+class UserGestionSerializer(serializers.ModelSerializer):
+    nombre_completo = serializers.SerializerMethodField(read_only=True)
+    nombre_completo_input = serializers.CharField(write_only=True, required=False)
+    rol = serializers.CharField(required=False)
+    telefono = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ('id', 'nombre_completo', 'nombre_completo_input', 'email', 'rol', 'telefono', 'is_active', 'password')
+
+    def get_nombre_completo(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() if (obj.first_name or obj.last_name) else obj.username
+
+    def create(self, validated_data):
+        nombre_completo = validated_data.pop('nombre_completo_input', '').strip()
+        email = validated_data.get('email')
+        rol = validated_data.pop('rol', 'TECNICO')
+        telefono = validated_data.pop('telefono', '')
+        
+        # Dividir nombre y apellido
+        parts = nombre_completo.split(' ', 1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ''
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            password=validated_data.get('password', 'Arroz123*')
+        )
+        # Crear perfil
+        Perfil.objects.create(user=user, rol=rol, telefono=telefono)
+        return user
+
+    def update(self, instance, validated_data):
+        nombre_completo = validated_data.pop('nombre_completo_input', None)
+        if nombre_completo is not None:
+            parts = nombre_completo.strip().split(' ', 1)
+            instance.first_name = parts[0]
+            instance.last_name = parts[1] if len(parts) > 1 else ''
+            
+        instance.email = validated_data.get('email', instance.email)
+        instance.username = instance.email # Mantener sincronizado
+        
+        password = validated_data.get('password', None)
+        if password:
+            instance.set_password(password)
+            
+        instance.is_active = validated_data.get('is_active', instance.is_active)
+        instance.save()
+        
+        # Perfil
+        rol = validated_data.pop('rol', None)
+        telefono = validated_data.pop('telefono', None)
+        
+        perfil = instance.perfil
+        if rol is not None:
+            perfil.rol = rol
+        if telefono is not None:
+            perfil.telefono = telefono
+        perfil.save()
+            
+        return instance
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if hasattr(instance, 'perfil'):
+            representation['rol'] = instance.perfil.rol
+            representation['telefono'] = instance.perfil.telefono
+        else:
+            representation['rol'] = 'SIN_ROL'
+            representation['telefono'] = ''
+        return representation
+
+class LiquidacionSerializer(serializers.ModelSerializer):
+    ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
+    lote_id = serializers.ReadOnlyField(source='ciclo.lote.id')
+    lote_nombre = serializers.ReadOnlyField(source='ciclo.lote.nombre')
+    finca_id = serializers.ReadOnlyField(source='ciclo.lote.finca.id')
+    finca_nombre = serializers.ReadOnlyField(source='ciclo.lote.finca.nombre')
+
+    class Meta:
+        model = Liquidacion
+        fields = (
+            'id', 'ciclo', 'ciclo_nombre', 'lote_id', 'lote_nombre',
+            'finca_id', 'finca_nombre', 'fecha', 'humedad_final_porcentaje',
+            'porcentaje_grano_entero', 'porcentaje_grano_quebrado',
+            'precio_tonelada_cop', 'descuentos_aplicados_cop',
+            'ingreso_neto_cop', 'observaciones'
+        )
+
+    def validate_humedad_final_porcentaje(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("La humedad debe estar entre 0% y 100%.")
+        return value
+
+    def validate_porcentaje_grano_entero(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de grano entero debe estar entre 0% y 100%.")
+        return value
+
+    def validate_porcentaje_grano_quebrado(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje de grano quebrado debe estar entre 0% y 100%.")
+        return value
+
+    def validate_precio_tonelada_cop(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El precio por tonelada no puede ser negativo.")
+        return value
+
+    def validate_ingreso_neto_cop(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El ingreso neto no puede ser negativo.")
+        return value
+
+    def validate(self, data):
+        entero = data.get('porcentaje_grano_entero')
+        quebrado = data.get('porcentaje_grano_quebrado')
+        if entero is not None and quebrado is not None:
+            if entero + quebrado > 100:
+                raise serializers.ValidationError("La suma de grano entero y quebrado no puede superar el 100%.")
+        return data
+
+
 
 
 

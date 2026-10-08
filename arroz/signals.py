@@ -18,7 +18,7 @@ def password_reset_token_created(sender, instance, reset_password_token, *args, 
     if settings.DEBUG:
         reset_url = f"http://localhost:5173/reset-password?token={reset_password_token.key}"
     else:
-        reset_url = f"https://sig-arroz-frontend.vercel.app/reset-password?token={reset_password_token.key}"
+        reset_url = f"https://sig-arroz-frontend-20.vercel.app/reset-password?token={reset_password_token.key}"
 
     # Detalles del Correo
     subject = "Recuperación de Contraseña - SIG-ARROZ 🌾"
