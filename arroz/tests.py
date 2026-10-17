@@ -178,6 +178,16 @@ class AuthAndPermissionsTestCase(APITestCase):
         })
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_cors_allowed_origin_header(self):
+        """Verifica que un origen permitido reciba cabecera Access-Control-Allow-Origin."""
+        response = self.client.get('/api/fincas/', HTTP_ORIGIN='http://localhost:5173')
+        self.assertEqual(response.headers.get('Access-Control-Allow-Origin'), 'http://localhost:5173')
+
+    def test_cors_disallowed_origin_blocked(self):
+        """Verifica que un origen desconocido no reciba cabecera Access-Control-Allow-Origin."""
+        response = self.client.get('/api/fincas/', HTTP_ORIGIN='http://sitio-malicioso.com')
+        self.assertNotIn('Access-Control-Allow-Origin', response.headers)
+
 
 class FincaAndLoteAPITestCase(APITestCase):
     def setUp(self):

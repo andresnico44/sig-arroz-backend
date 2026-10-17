@@ -58,9 +58,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# =========================================================================
+# CONFIGURACIÓN DE SEGURIDAD CORS Y CSRF (CR-011 / HU-031 / INSSA-72)
+# =========================================================================
 CORS_ALLOW_ALL_ORIGINS = False
 
-CORS_ALLOWED_ORIGINS = [
+# Orígenes base de confianza para desarrollo local y producción Railway/Vercel
+DEFAULT_TRUSTED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:3000',
@@ -68,13 +72,15 @@ CORS_ALLOWED_ORIGINS = [
     'https://sig-arroz-frontend-20.vercel.app',
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:3000',
-    'https://sig-arroz-frontend.vercel.app',
-    'https://sig-arroz-frontend-20.vercel.app',
+# Permite inyectar orígenes adicionales por variable de entorno separada por comas
+EXTRA_CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
 ]
+
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_TRUSTED_ORIGINS + EXTRA_CORS_ORIGINS))
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(DEFAULT_TRUSTED_ORIGINS + EXTRA_CORS_ORIGINS))
 
 CORS_ALLOW_CREDENTIALS = True
 
