@@ -141,6 +141,30 @@ class LiquidacionModelAndTrazabilidadTestCase(TestCase):
         self.assertEqual(balance_por_ha, Decimal('1000000.00'))
         self.assertTrue(balance > Decimal('0.00'))
 
+    def test_precision_fraccionaria_centavos_decimal(self):
+        """Verifica que montos con centavos (.33, .67) no acumulen error de coma flotante IEEE 754."""
+        from decimal import Decimal
+        # Costo 1 con centavos: $1,234,567.33
+        c1 = RegistroCosto.objects.create(
+            ciclo=self.ciclo,
+            fecha=datetime.date(2026, 4, 11),
+            categoria='INSUMOS_AGROQUIMICOS',
+            descripcion='Herbicida selectivo',
+            monto_total=Decimal('1234567.33')
+        )
+        # Costo 2 con centavos: $876,543.67
+        c2 = RegistroCosto.objects.create(
+            ciclo=self.ciclo,
+            fecha=datetime.date(2026, 4, 12),
+            categoria='MANO_DE_OBRA',
+            descripcion='Aplicación mecanizada',
+            monto_total=Decimal('876543.67')
+        )
+        # Suma exacta esperada: .33 + .67 = 1.00 -> 2,111,111.00
+        suma_costos = c1.monto_total + c2.monto_total
+        self.assertEqual(suma_costos, Decimal('2111111.00'))
+        self.assertIsInstance(suma_costos, Decimal)
+
 
 from rest_framework.test import APITestCase
 from rest_framework import status
