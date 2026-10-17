@@ -31,6 +31,8 @@ import logging
 
 logger = logging.getLogger('arroz')
 
+from django.db import DatabaseError
+
 class PasswordResetRequestView(APIView):
     permission_classes = (AllowAny,)
 
@@ -39,15 +41,27 @@ class PasswordResetRequestView(APIView):
         if not email:
             return Response({'error': 'Debe proporcionar un correo electrónico'}, status=status.HTTP_400_BAD_REQUEST)
         
-        user = User.objects.filter(email=email).first()
-        if user:
-            logger.info("Solicitud de recuperación de contraseña recibida para: %s", email)
-            # Simulación estructurada de envío de correo en logs formales
-            logger.info("Simulación de correo: enlace de recuperación generado para %s (expiración estándar)", email)
-            
-        return Response({
-            'message': 'Si el correo existe en nuestra base de datos, te enviaremos instrucciones para restablecer tu contraseña.'
-        }, status=status.HTTP_200_OK)
+        try:
+            user = User.objects.filter(email=email).first()
+            if user:
+                logger.info("Solicitud de recuperación de contraseña recibida para: %s", email)
+                logger.info("Simulación de correo: enlace de recuperación generado para %s (expiración estándar)", email)
+                
+            return Response({
+                'message': 'Si el correo existe en nuestra base de datos, te enviaremos instrucciones para restablecer tu contraseña.'
+            }, status=status.HTTP_200_OK)
+
+        except DatabaseError as db_err:
+            logger.error("Error de base de datos en PasswordResetRequestView para %s: %s", email, str(db_err), exc_info=True)
+            return Response({
+                'error': 'Ocurrió un problema de comunicación con el servicio de datos. Intente más tarde.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as ex:
+            logger.error("Excepción inesperada en PasswordResetRequestView para %s: %s", email, str(ex), exc_info=True)
+            return Response({
+                'error': 'Ocurrió un error inesperado al procesar la solicitud. Por favor intente más tarde.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # =========================================================================
 # SPRINT 2: CONTROLADORES DE GESTIÓN DE CULTIVO (FINCAS Y LOTES)
