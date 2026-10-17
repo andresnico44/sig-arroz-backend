@@ -140,3 +140,87 @@ class LiquidacionModelAndTrazabilidadTestCase(TestCase):
         self.assertEqual(ingreso_por_ha, Decimal('2500000.00'))
         self.assertEqual(balance_por_ha, Decimal('1000000.00'))
         self.assertTrue(balance > Decimal('0.00'))
+
+
+from rest_framework.test import APITestCase
+from rest_framework import status
+
+class AuthAndPermissionsTestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='productor1', email='prod1@sig-arroz.com', password='Password123!')
+        self.perfil = Perfil.objects.create(user=self.user, rol='PRODUCTOR')
+        
+    def test_unauthenticated_access_denied(self):
+        """Verifica que peticiones sin JWT sean rechazadas con 401."""
+        response = self.client.get('/api/fincas/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_jwt_obtain_pair_success(self):
+        """Verifica que las credenciales correctas devuelvan access y refresh token con claims de rol."""
+        from rest_framework_simplejwt.tokens import AccessToken
+        response = self.client.post('/api/token/', {
+            'username': 'productor1',
+            'password': 'Password123!'
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+        
+        # Validar que el token JWT contiene el rol PRODUCTOR
+        token_data = AccessToken(response.data['access'])
+        self.assertEqual(token_data.get('rol'), 'PRODUCTOR')
+
+    def test_jwt_obtain_pair_invalid_credentials(self):
+        """Verifica que credenciales inválidas retornen 401."""
+        response = self.client.post('/api/token/', {
+            'username': 'productor1',
+            'password': 'WrongPassword!'
+        })
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class FincaAndLoteAPITestCase(APITestCase):
+    def setUp(self):
+        self.productor1 = User.objects.create_user(username='prod_alpha', email='alpha@test.com', password='Password123!')
+        self.perfil1 = Perfil.objects.create(user=self.productor1, rol='PRODUCTOR')
+        
+        self.productor2 = User.objects.create_user(username='prod_beta', email='beta@test.com', password='Password123!')
+        self.perfil2 = Perfil.objects.create(user=self.productor2, rol='PRODUCTOR')
+        
+        # Finca del Productor 1
+        self.finca1 = Finca.objects.create(
+            productor=self.productor1,
+            nombre='Finca San Jose',
+            ubicacion_departamento='Norte de Santander',
+            ubicacion_municipio='Zulia',
+            area_total_ha=20.0
+        )
+
+    def test_productor_crud_finca(self):
+        """Verifica que un productor autenticado pueda crear y consultar sus fincas."""
+        self.client.force_authenticate(user=self.productor1)
+        
+        # 1. Listar fincas
+        response = self.client.get('/api/fincas/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['nombre'], 'Finca San Jose')
+        
+        # 2. Crear nueva finca
+        payload = {
+            'nombre': 'Finca Buena Vista',
+            'ubicacion_departamento': 'Casanare',
+            'ubicacion_municipio': 'Yopal',
+            'area_total_ha': '15.50'
+        }
+        res_create = self.client.post('/api/fincas/', payload)
+        self.assertEqual(res_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Finca.objects.filter(productor=self.productor1).count(), 2)
+
+    def test_productor_data_isolation(self):
+        """Verifica el aislamiento: el productor 2 no ve las fincas del productor 1."""
+        self.client.force_authenticate(user=self.productor2)
+        response = self.client.get('/api/fincas/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)  # No tiene fincas creadas aún
+
