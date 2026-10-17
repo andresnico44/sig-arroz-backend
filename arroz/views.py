@@ -27,6 +27,10 @@ class RegistroUsuarioView(generics.CreateAPIView):
     serializer_class = RegistroUsuarioSerializer
 
 # Vista para solicitar Recuperación de Contraseña (RF03)
+import logging
+
+logger = logging.getLogger('arroz')
+
 class PasswordResetRequestView(APIView):
     permission_classes = (AllowAny,)
 
@@ -37,15 +41,9 @@ class PasswordResetRequestView(APIView):
         
         user = User.objects.filter(email=email).first()
         if user:
-            # En producción, usaríamos send_mail de Django
-            print("\n" + "="*50)
-            print("✉️ SIMULACIÓN DE ENVÍO DE CORREO")
-            print(f"Destinatario: {email}")
-            print("Asunto: Recuperación de contraseña SIG-ARROZ")
-            print("Cuerpo: Hemos recibido una solicitud para restablecer tu contraseña.")
-            print("Haz clic en el siguiente enlace para crear una nueva:")
-            print(f"http://localhost:5173/reset-password?token=fake-jwt-token-12345")
-            print("="*50 + "\n")
+            logger.info("Solicitud de recuperación de contraseña recibida para: %s", email)
+            # Simulación estructurada de envío de correo en logs formales
+            logger.info("Simulación de correo: enlace de recuperación generado para %s (expiración estándar)", email)
             
         return Response({
             'message': 'Si el correo existe en nuestra base de datos, te enviaremos instrucciones para restablecer tu contraseña.'

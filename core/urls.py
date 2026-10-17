@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import DefaultRouter
-from arroz.views import (CustomTokenObtainPairView, RegistroUsuarioView, FincaViewSet, LoteViewSet, 
+from arroz.views import (CustomTokenObtainPairView, RegistroUsuarioView, PasswordResetRequestView, FincaViewSet, LoteViewSet, 
                          AnalisisSueloViewSet, CicloProductivoViewSet, ProductoresListView,
                          PreparacionMaquinariaViewSet, SiembraViewSet, SeguimientoFenologicoViewSet,
                          RegistroCostoViewSet, MonitoreoFitosanitarioViewSet, FertilizacionViewSet,
@@ -40,6 +40,7 @@ urlpatterns = [
     
     # Módulo 2: Usuarios y Roles (Registro y Recuperación)
     path('api/users/register/', RegistroUsuarioView.as_view(), name='user_register'),
+    path('api/users/password-reset/', PasswordResetRequestView.as_view(), name='user_password_reset'),
     path('api/productores/', ProductoresListView.as_view(), name='lista_productores'),
     path('api/password_reset/', include('django_rest_passwordreset.urls', namespace='password_reset')),
     path('api/admin/metrics/', AdminMetricsView.as_view(), name='admin_metrics'),
