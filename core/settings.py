@@ -36,8 +36,9 @@ if not SECRET_KEY:
             "En entornos de producción (DEBUG=False), el sistema aborta el arranque para impedir operar con una clave insegura. "
             "Configure 'SECRET_KEY' en las variables de entorno del host."
         )
-    # Fallback exclusivo para desarrollo local permisivo (DEBUG=True)
-    SECRET_KEY = 'django-insecure-sig-arroz-local-dev-fallback-key'
+    # Fallback dinámico exclusivo para desarrollo local (sin quemar claves en texto plano)
+    from django.core.management.utils import get_random_secret_key
+    SECRET_KEY = get_random_secret_key()
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.railway.app').split(',')
 
