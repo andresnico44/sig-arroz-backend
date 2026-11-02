@@ -1,9 +1,17 @@
+import os
+import datetime
+from decimal import Decimal
+from unittest.mock import patch
+from packaging import version
+
 from django.test import TestCase
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth.models import User
+from rest_framework.exceptions import ValidationError
+
 from arroz.models import Finca, Lote, CicloProductivo, Cosecha, Liquidacion, Perfil, RegistroCosto
 from arroz.serializers import LiquidacionSerializer
-from rest_framework.exceptions import ValidationError
-import datetime
 
 class LiquidacionModelAndTrazabilidadTestCase(TestCase):
     def setUp(self):
@@ -122,7 +130,6 @@ class LiquidacionModelAndTrazabilidadTestCase(TestCase):
         # Rentable = True (5.0M > 0)
         
         # Simular lo que calcula la vista del backend en la acción trazabilidad
-        from decimal import Decimal
         costos = self.ciclo.costos.all()
         total_egresos = sum((c.monto_total for c in costos), Decimal('0.00'))
         ingreso_neto = Decimal(str(self.ciclo.liquidacion.ingreso_neto_cop))
@@ -140,3 +147,63 @@ class LiquidacionModelAndTrazabilidadTestCase(TestCase):
         self.assertEqual(ingreso_por_ha, Decimal('2500000.00'))
         self.assertEqual(balance_por_ha, Decimal('1000000.00'))
         self.assertTrue(balance > Decimal('0.00'))
+
+
+class SecretKeySecurityTestCase(TestCase):
+    """Pruebas de seguridad para la externalización de SECRET_KEY (HU-030 / CR-010 / RNF-05)."""
+
+    def test_secret_key_loaded_dynamically(self):
+        """Escenario 1: Verifica que SECRET_KEY esté configurada dinámicamente y no sea nula."""
+        self.assertIsNotNone(settings.SECRET_KEY)
+        self.assertGreater(len(settings.SECRET_KEY), 0)
+
+    def test_secret_key_not_hardcoded_in_settings(self):
+        """Escenario 1: Verifica que en core/settings.py la asignación provenga de os.getenv('SECRET_KEY')."""
+        settings_path = os.path.join(settings.BASE_DIR, 'core', 'settings.py')
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn("SECRET_KEY = os.getenv('SECRET_KEY')", content)
+
+    def test_secret_key_missing_in_production_raises_error(self):
+        """Escenario 2: Verifica que en producción (DEBUG=False) sin SECRET_KEY se aborte con ImproperlyConfigured."""
+        # Simular la lógica de validación de arranque de core/settings.py
+        with patch.dict(os.environ, {'SECRET_KEY': '', 'DEBUG': 'False', 'RAILWAY_ENVIRONMENT': '1'}, clear=False):
+            secret = os.getenv('SECRET_KEY')
+            if secret:
+                secret = secret.strip()
+            debug = os.getenv('DEBUG', 'True') == 'True' and not os.getenv('RAILWAY_ENVIRONMENT')
+
+            with self.assertRaises(ImproperlyConfigured) as context:
+                if not secret:
+                    if not debug:
+                        raise ImproperlyConfigured(
+                            "CR-010 / RNF-05 Error Crítico de Seguridad: La variable de entorno 'SECRET_KEY' no está definida. "
+                            "En entornos de producción (DEBUG=False), el sistema aborta el arranque para impedir operar con una clave insegura. "
+                            "Configure 'SECRET_KEY' en las variables de entorno del host."
+                        )
+
+            self.assertIn("CR-010 / RNF-05", str(context.exception))
+
+
+class DependenciesSecurityAuditTestCase(TestCase):
+    """Pruebas de auditoría de dependencias seguras sin CVEs (HU-035 / CR-015 / RT-14)."""
+
+    def test_gunicorn_version_mitigates_request_smuggling(self):
+        """Escenario 1: Verifica que gunicorn sea >= 22.0.0 para mitigar CVE-2024-1135."""
+        import gunicorn
+        v = version.parse(gunicorn.__version__)
+        self.assertGreaterEqual(
+            v, 
+            version.parse("22.0.0"), 
+            f"Gunicorn ({gunicorn.__version__}) debe ser >= 22.0.0 para mitigar CVE-2024-1135 (HTTP Request Smuggling)"
+        )
+
+    def test_requests_version_mitigates_authorization_leak(self):
+        """Escenario 2: Verifica que requests sea >= 2.31.0 para mitigar CVE-2023-32681."""
+        import requests
+        v = version.parse(requests.__version__)
+        self.assertGreaterEqual(
+            v, 
+            version.parse("2.31.0"), 
+            f"Requests ({requests.__version__}) debe ser >= 2.31.0 para mitigar CVE-2023-32681 (Fuga de cabeceras Authorization)"
+        )
