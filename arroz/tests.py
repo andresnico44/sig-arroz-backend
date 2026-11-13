@@ -324,3 +324,35 @@ class DependenciesSecurityAuditTestCase(TestCase):
             version.parse("2.31.0"), 
             f"Requests ({requests.__version__}) debe ser >= 2.31.0 para mitigar CVE-2023-32681 (Fuga de cabeceras Authorization)"
         )
+
+
+class PasswordResetReverseUrlTestCase(TestCase):
+    """Pruebas para verificar la generación dinámica de URLs con reverse() (HU-027 / CR-007 / RT-03)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='productor_test_reset',
+            email='test_reset@sig-arroz.com',
+            password='PasswordSeguro123*'
+        )
+        Perfil.objects.create(user=self.user, rol='PRODUCTOR')
+
+    def test_reverse_resolution_for_password_reset_endpoints(self):
+        """Escenario 1: Comprueba que los endpoints de recuperación se resuelven dinámicamente con reverse()."""
+        user_reset_url = reverse('user_password_reset')
+        django_reset_url = reverse('password_reset:reset-password-request')
+        confirm_reset_url = reverse('password_reset:reset-password-confirm')
+
+        self.assertEqual(user_reset_url, '/api/users/password-reset/')
+        self.assertEqual(django_reset_url, '/api/password_reset/')
+        self.assertEqual(confirm_reset_url, '/api/password_reset/confirm/')
+
+    def test_password_reset_request_view_success_and_dynamic_url(self):
+        """Escenario 2: Solicita restablecimiento vía endpoint y valida respuesta 200 OK."""
+        url = reverse('user_password_reset')
+        response = self.client.post(url, {'email': self.user.email}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('message', response.data)
+        self.assertIn('Si el correo existe', response.data['message'])
