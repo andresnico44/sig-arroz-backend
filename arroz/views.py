@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
@@ -78,6 +79,9 @@ class PasswordResetRequestView(APIView):
             user = User.objects.filter(email=email).first()
             if user:
                 logger.info("Solicitud de recuperación de contraseña recibida para: %s", email)
+                # Resolución dinámica de la URL con reverse() en cumplimiento de HU-027 / CR-007
+                resolved_reset_url = request.build_absolute_uri(reverse('user_password_reset'))
+                logger.info("Enlace resuelto dinámicamente con reverse() para %s: %s", email, resolved_reset_url)
                 logger.info("Simulación de correo: enlace de recuperación generado para %s (expiración estándar)", email)
                 
             return Response({
