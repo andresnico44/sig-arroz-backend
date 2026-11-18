@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 from rest_framework.exceptions import ValidationError
 
 from arroz.models import Finca, Lote, CicloProductivo, Cosecha, Liquidacion, Perfil, RegistroCosto
-from arroz.serializers import LiquidacionSerializer
+from arroz.serializers import LiquidacionSerializer, AplicacionAgroquimicoSerializer
 
 class LiquidacionModelAndTrazabilidadTestCase(TestCase):
     def setUp(self):
@@ -359,3 +359,120 @@ class PasswordResetReverseUrlTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('message', response.data)
         self.assertIn('Si el correo existe', response.data['message'])
+
+
+class AgronomicValidationsModularTestCase(TestCase):
+    """Pruebas unitarias para la modularización de validaciones agronómicas (HU-026 / CR-006 / RT-02)."""
+
+    def setUp(self):
+        self.serializer = AplicacionAgroquimicoSerializer()
+
+    # =========================================================================
+    # ESCENARIO 1: VALIDACIÓN MODULAR DE CONTROL DE MALEZAS (validate_control_malezas)
+    # =========================================================================
+    def test_control_malezas_valido_aislado(self):
+        """Escenario 1: Verifica que validate_control_malezas() apruebe payload agronómico correcto sin acoplamiento."""
+        payload = {
+            'nombre_comercial': 'Propanil 480 EC',
+            'dosis_por_ha': Decimal('3.50'),
+            'equipo_aspersion': 'Bomba de Espalda Motorizada',
+            'velocidad_viento_kmh': Decimal('8.5'),
+        }
+        resultado = self.serializer.validate_control_malezas(payload)
+        self.assertEqual(resultado, payload)
+
+    def test_control_malezas_rechaza_nombre_comercial_vacio(self):
+        """Escenario 1: Rechaza herbicida sin nombre comercial o con espacios."""
+        payload = {
+            'nombre_comercial': '   ',
+            'dosis_por_ha': Decimal('2.00'),
+            'equipo_aspersion': 'Tractor',
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_control_malezas(payload)
+        self.assertIn('nombre_comercial', ctx.exception.detail)
+
+    def test_control_malezas_rechaza_dosis_invalida_o_cero(self):
+        """Escenario 1: Rechaza dosis de herbicida menor o igual a cero o excesiva."""
+        payload_cero = {
+            'nombre_comercial': 'Clincher EC',
+            'dosis_por_ha': Decimal('0.00'),
+            'equipo_aspersion': 'Dron Agrícola',
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_control_malezas(payload_cero)
+        self.assertIn('dosis_por_ha', ctx.exception.detail)
+
+        payload_excesivo = {
+            'nombre_comercial': 'Clincher EC',
+            'dosis_por_ha': Decimal('85.00'),
+            'equipo_aspersion': 'Dron Agrícola',
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_control_malezas(payload_excesivo)
+        self.assertIn('dosis_por_ha', ctx.exception.detail)
+
+    def test_control_malezas_rechaza_metodo_aspersion_vacio(self):
+        """Escenario 1: Rechaza registro sin método o equipo de aspersión definido."""
+        payload = {
+            'nombre_comercial': 'Bispyribac Sodio',
+            'dosis_por_ha': Decimal('1.20'),
+            'equipo_aspersion': '',
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_control_malezas(payload)
+        self.assertIn('equipo_aspersion', ctx.exception.detail)
+
+    def test_control_malezas_deriva_viento_excesivo(self):
+        """Escenario 1: Alerta riesgo crítico de deriva agronómica con viento > 25 km/h."""
+        payload = {
+            'nombre_comercial': 'Nominee 100 SC',
+            'dosis_por_ha': Decimal('0.80'),
+            'equipo_aspersion': 'Tractor',
+            'velocidad_viento_kmh': Decimal('28.0'),
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_control_malezas(payload)
+        self.assertIn('velocidad_viento_kmh', ctx.exception.detail)
+
+    # =========================================================================
+    # ESCENARIO 2: VALIDACIÓN MODULAR DE FITOSANITARIO (validate_fitosanitario)
+    # =========================================================================
+    def test_fitosanitario_valido_aislado(self):
+        """Escenario 2: Verifica que validate_fitosanitario() apruebe ingrediente activo y carencia válidos."""
+        payload = {
+            'ingrediente_activo': 'Triciclazol 75 WP',
+            'periodo_carencia_dias': 28,
+        }
+        resultado = self.serializer.validate_fitosanitario(payload)
+        self.assertEqual(resultado, payload)
+
+    def test_fitosanitario_rechaza_ingrediente_activo_vacio(self):
+        """Escenario 2: Retorna error específico si el ingrediente activo está ausente."""
+        payload = {
+            'ingrediente_activo': '  ',
+            'periodo_carencia_dias': 15,
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_fitosanitario(payload)
+        self.assertIn('ingrediente_activo', ctx.exception.detail)
+
+    def test_fitosanitario_rechaza_periodo_carencia_negativo(self):
+        """Escenario 2: Retorna error específico si el periodo de carencia es negativo."""
+        payload = {
+            'ingrediente_activo': 'Azoxistrobina',
+            'periodo_carencia_dias': -7,
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_fitosanitario(payload)
+        self.assertIn('periodo_carencia_dias', ctx.exception.detail)
+
+    def test_fitosanitario_rechaza_periodo_carencia_excesivo(self):
+        """Escenario 2: Retorna error específico si el periodo de carencia supera 120 días."""
+        payload = {
+            'ingrediente_activo': 'Difenoconazol',
+            'periodo_carencia_dias': 150,
+        }
+        with self.assertRaises(ValidationError) as ctx:
+            self.serializer.validate_fitosanitario(payload)
+        self.assertIn('periodo_carencia_dias', ctx.exception.detail)
