@@ -214,3 +214,4 @@ Todos los cambios fueron consolidados y subidos a los repositorios oficiales de 
 * **Rama Remota:** `origin/Nicole`
 * **Commit Clave:**
   * `ff7a665`: Implementación de HU-028 (README y .env.example) y HU-033 (Componente `ProtectedRoute`, rutas de administración y suite de pruebas Vitest).
+
