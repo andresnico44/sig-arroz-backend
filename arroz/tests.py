@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework.exceptions import ValidationError
 
-from arroz.models import Finca, Lote, CicloProductivo, Cosecha, Liquidacion, Perfil, RegistroCosto
+from arroz.models import Finca, Lote, CicloProductivo, Cosecha, Liquidacion, Perfil, RegistroCosto, MonitoreoFitosanitario
 from arroz.serializers import LiquidacionSerializer, AplicacionAgroquimicoSerializer
 
 class LiquidacionModelAndTrazabilidadTestCase(TestCase):
@@ -267,6 +267,66 @@ class FincaAndLoteAPITestCase(APITestCase):
         response = self.client.get('/api/fincas/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)  # No tiene fincas creadas aún
+
+    def test_crear_lote_sin_coordenadas_gps_exitoso(self):
+        """CR-018 / HU-039: Verifica que un lote pueda persistirse sin coordenadas GPS (nulas)."""
+        self.client.force_authenticate(user=self.productor1)
+        payload = {
+            'finca': self.finca1.id,
+            'nombre': 'Lote Central Sin GPS',
+            'area_hectareas': '8.50',
+            'tipo_suelo': 'FRANCO',
+            'sistema_produccion': 'RIEGO',
+            'latitud': None,
+            'longitud': None,
+            'estado': 'ACTIVO'
+        }
+        response = self.client.post('/api/lotes/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data.get('latitud'))
+        self.assertIsNone(response.data.get('longitud'))
+        
+        lote_creado = Lote.objects.get(id=response.data['id'])
+        self.assertIsNone(lote_creado.latitud)
+        self.assertIsNone(lote_creado.longitud)
+
+    def test_crear_monitoreo_fitosanitario_sin_coordenadas_gps_exitoso(self):
+        """CR-018 / HU-039: Verifica que el monitoreo fitosanitario guarde sin coordenadas GPS."""
+        self.client.force_authenticate(user=self.productor1)
+        lote = Lote.objects.create(
+            finca=self.finca1,
+            nombre='Lote Fitosanitario',
+            area_hectareas=5.0,
+            tipo_suelo='FRANCO',
+            sistema_produccion='RIEGO'
+        )
+        ciclo = CicloProductivo.objects.create(
+            lote=lote,
+            nombre_ciclo='Ciclo Test Fitosanitario',
+            anio=2026,
+            semestre='1',
+            variedad_arroz='FEDEARROZ_67',
+            presupuesto_estimado=10000000.0,
+            estado='EJECUCION'
+        )
+        payload = {
+            'ciclo': ciclo.id,
+            'fecha': '2026-11-18',
+            'tipo_problema': 'PLAGA',
+            'nombre_comun': 'Spodoptera frugiperda (Gusano cogollero)',
+            'umbral_danio_porcentaje': '12.00',
+            'decision_tecnica': 'Control biológico recomendado',
+            'latitud': None,
+            'longitud': None
+        }
+        response = self.client.post('/api/monitoreos/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data.get('latitud'))
+        self.assertIsNone(response.data.get('longitud'))
+        
+        monitoreo_creado = MonitoreoFitosanitario.objects.get(id=response.data['id'])
+        self.assertIsNone(monitoreo_creado.latitud)
+        self.assertIsNone(monitoreo_creado.longitud)
 
 
 class SecretKeySecurityTestCase(TestCase):
