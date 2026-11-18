@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .models import (Perfil, Finca, Lote, AnalisisSuelo, CicloProductivo, PreparacionMaquinaria, Siembra, 
@@ -473,7 +474,7 @@ class AplicacionAgroquimicoSerializer(serializers.ModelSerializer):
     """Serializador para las aspersiones de plaguicidas de protección de cultivos.
 
     Asocia el evento de control con el monitoreo fitosanitario que lo motivó y valida
-    que el periodo de carencia antes de cosecha no sea un valor negativo.
+    modularmente reglas agronómicas para control de malezas y fitosanidad (CR-006 / HU-026 / RNF-18).
     """
     ciclo_nombre = serializers.ReadOnlyField(source='ciclo.nombre_ciclo')
     monitoreo_nombre = serializers.ReadOnlyField(source='monitoreo.nombre_comun')
@@ -497,6 +498,137 @@ class AplicacionAgroquimicoSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("El periodo de carencia no puede ser negativo.")
         return value
+
+    def validate_control_malezas(self, data):
+        """Valida modularmente las reglas agronómicas para aplicaciones de control de malezas (herbicidas).
+
+        Verifica de forma aislada que el producto comercial/ingrediente, la dosis dosificada
+        y el método de aspersión cumplan las normas técnicas agronómicas sin depender del resto
+        del payload (CR-006 / HU-026 / Subtarea 1 / Escenario 1).
+
+        Args:
+            data (dict): Diccionario con datos de la labor ('nombre_comercial', 'dosis_por_ha', 'equipo_aspersion', etc.).
+
+        Returns:
+            dict: Datos validados si cumplen los criterios agronómicos de control de malezas.
+
+        Raises:
+            serializers.ValidationError: Si el producto, la dosis o el método no cumplen las reglas agronómicas.
+        """
+        errors = {}
+
+        # 1. Validación de Producto / Nombre Comercial
+        nombre_comercial = data.get('nombre_comercial')
+        if not nombre_comercial or not str(nombre_comercial).strip():
+            errors['nombre_comercial'] = "Para control de malezas debe especificar el nombre comercial del herbicida."
+        elif len(str(nombre_comercial).strip()) < 3:
+            errors['nombre_comercial'] = "El nombre comercial del herbicida debe tener al menos 3 caracteres."
+
+        # 2. Validación de Dosis por Hectárea
+        dosis = data.get('dosis_por_ha')
+        if dosis is None:
+            errors['dosis_por_ha'] = "La dosis por hectárea es requerida para el control de malezas."
+        else:
+            try:
+                dosis_dec = Decimal(str(dosis))
+                if dosis_dec <= Decimal('0'):
+                    errors['dosis_por_ha'] = "La dosis del herbicida debe ser estrictamente mayor a 0."
+                elif dosis_dec > Decimal('50.00'):
+                    errors['dosis_por_ha'] = "La dosis excede el umbral agronómico máximo permitido (50 kg o L por hectárea)."
+            except (ValueError, TypeError):
+                errors['dosis_por_ha'] = "La dosis por hectárea debe ser un valor numérico válido."
+
+        # 3. Validación de Método o Equipo de Aspersión
+        equipo = data.get('equipo_aspersion')
+        if not equipo or not str(equipo).strip():
+            errors['equipo_aspersion'] = "Debe indicar el método o equipo de aspersión utilizado para el control de malezas."
+        elif len(str(equipo).strip()) < 3:
+            errors['equipo_aspersion'] = "El método o equipo de aspersión debe tener al menos 3 caracteres."
+
+        # 4. Deriva por viento excesivo (si se proporciona)
+        viento = data.get('velocidad_viento_kmh')
+        if viento is not None:
+            try:
+                if Decimal(str(viento)) > Decimal('25.0'):
+                    errors['velocidad_viento_kmh'] = "La velocidad del viento supera los 25 km/h; existe riesgo crítico de deriva agronómica de herbicidas hacia lotes colindantes."
+            except (ValueError, TypeError):
+                pass
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return data
+
+    def validate_fitosanitario(self, data):
+        """Valida modularmente las aplicaciones fitosanitarias para control de plagas y enfermedades.
+
+        Verifica de forma aislada e independiente que el ingrediente activo esté formulado
+        correctamente y que el periodo de carencia (días de retiro previo a cosecha)
+        sea estrictamente válido y compatible con la inocuidad alimentaria (CR-006 / HU-026 / Subtarea 2 / Escenario 2).
+
+        Args:
+            data (dict): Diccionario con datos de la labor ('ingrediente_activo', 'periodo_carencia_dias', etc.).
+
+        Returns:
+            dict: Datos validados si cumplen los criterios fitosanitarios.
+
+        Raises:
+            serializers.ValidationError: Si el ingrediente activo o el periodo de carencia son inválidos.
+        """
+        errors = {}
+
+        # 1. Validación de Ingrediente Activo
+        ingrediente = data.get('ingrediente_activo')
+        if not ingrediente or not str(ingrediente).strip():
+            errors['ingrediente_activo'] = "El ingrediente activo es obligatorio para aplicaciones fitosanitarias."
+        elif len(str(ingrediente).strip()) < 3:
+            errors['ingrediente_activo'] = "El ingrediente activo debe tener al menos 3 caracteres."
+
+        # 2. Validación de Periodo de Carencia
+        periodo = data.get('periodo_carencia_dias')
+        if periodo is None:
+            errors['periodo_carencia_dias'] = "El periodo de carencia en días es obligatorio para aplicaciones fitosanitarias."
+        else:
+            try:
+                periodo_int = int(periodo)
+                if periodo_int < 0:
+                    errors['periodo_carencia_dias'] = "El periodo de carencia no puede ser negativo."
+                elif periodo_int > 120:
+                    errors['periodo_carencia_dias'] = "El periodo de carencia excede el tiempo total de ciclo de cultivo de arroz (máximo 120 días)."
+            except (ValueError, TypeError):
+                errors['periodo_carencia_dias'] = "El periodo de carencia debe ser un número entero de días válido."
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return data
+
+    def validate(self, data):
+        """Aplica las validaciones agronómicas modularizadas según el tipo de aplicación fitoterapéutica.
+
+        Args:
+            data (dict): Payload completo de la aplicación.
+
+        Returns:
+            dict: Datos validados.
+        """
+        monitoreo = data.get('monitoreo')
+        es_maleza = False
+
+        if monitoreo:
+            es_maleza = (getattr(monitoreo, 'tipo_problema', None) == 'MALEZA')
+        else:
+            nombre = str(data.get('nombre_comercial', '')).lower()
+            ingrediente = str(data.get('ingrediente_activo', '')).lower()
+            es_maleza = any(kw in nombre or kw in ingrediente for kw in ['herbicida', 'glifosato', 'propanil', 'bispiribac', 'clomazone', 'maleza'])
+
+        if es_maleza:
+            self.validate_control_malezas(data)
+
+        # Validación fitosanitaria general
+        self.validate_fitosanitario(data)
+
+        return data
 
 
 class RegistroHidricoSerializer(serializers.ModelSerializer):
