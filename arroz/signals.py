@@ -14,11 +14,14 @@ def password_reset_token_created(sender, instance, reset_password_token, *args, 
     # Establecer un tiempo límite de conexión de 5 segundos para evitar cuelgues del servidor Gunicorn
     socket.setdefaulttimeout(5)
 
-    # Enlace dinámico según el entorno (Local o Producción)
-    if settings.DEBUG:
-        reset_url = f"http://localhost:5173/reset-password?token={reset_password_token.key}"
-    else:
-        reset_url = f"https://sig-arroz-frontend-20.vercel.app/reset-password?token={reset_password_token.key}"
+    # Construcción dinámica de la URL con reverse() y URL base configurable (HU-027 / CR-007)
+    reset_endpoint = reverse('password_reset:reset-password-confirm')
+    frontend_base_url = getattr(
+        settings, 
+        'FRONTEND_URL', 
+        'http://localhost:5173' if settings.DEBUG else 'https://sig-arroz-frontend-20.vercel.app'
+    ).rstrip('/')
+    reset_url = f"{frontend_base_url}/reset-password?token={reset_password_token.key}"
 
     # Detalles del Correo
     subject = "Recuperación de Contraseña - SIG-ARROZ 🌾"
